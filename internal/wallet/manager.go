@@ -35,6 +35,15 @@ type UTXO struct {
 	State     string `json:"state"`
 	Timestamp int64  `json:"timestamp"`
 	Address   string `json:"address,omitempty"`
+	Label     *Label `json:"label,omitempty"` // Add label information
+}
+
+// Label represents a labeled address for the GUI
+type Label struct {
+	PubKey  string `json:"pub_key"`
+	Tweak   string `json:"tweak"`
+	Address string `json:"address"`
+	M       uint32 `json:"m"`
 }
 
 // Wallet represents the core wallet data
@@ -719,6 +728,17 @@ func (m *Manager) setupScanner() error {
 func convertOwnedUTXOsToGUI(owned []*OwnedUTXO) []UTXO {
 	var guiUTXOs []UTXO
 	for _, u := range owned {
+		// Convert label if present
+		var label *Label
+		if u.Label != nil {
+			label = &Label{
+				PubKey:  fmt.Sprintf("%x", u.Label.PubKey[:]),
+				Tweak:   fmt.Sprintf("%x", u.Label.Tweak[:]),
+				Address: u.Label.Address,
+				M:       u.Label.M,
+			}
+		}
+
 		guiUTXOs = append(guiUTXOs, UTXO{
 			TxID:      fmt.Sprintf("%x", u.Txid[:]),
 			Vout:      u.Vout,
@@ -726,6 +746,7 @@ func convertOwnedUTXOsToGUI(owned []*OwnedUTXO) []UTXO {
 			State:     u.State.String(),
 			Timestamp: int64(u.Timestamp),
 			Address:   "", // Optionally fill if you have address info
+			Label:     label,
 		})
 	}
 	return guiUTXOs
@@ -758,12 +779,49 @@ func convertGUIUTXOsToOwned(guiUTXOs []UTXO) []*OwnedUTXO {
 			state = StateUnconfirmed
 		}
 
+		// Convert label if present
+		var label *bip352.Label
+		if u.Label != nil {
+			// Parse pubkey and tweak from hex strings
+			var pubKeyBytes, tweakBytes []byte
+			if len(u.Label.PubKey) >= 66 { // 33 bytes = 66 hex chars
+				pubKeyBytes = make([]byte, 33)
+				for i := 0; i < 33; i++ {
+					if i*2+1 < len(u.Label.PubKey) {
+						high := u.Label.PubKey[i*2]
+						low := u.Label.PubKey[i*2+1]
+						pubKeyBytes[i] = hexCharToByte(high)<<4 | hexCharToByte(low)
+					}
+				}
+			}
+			if len(u.Label.Tweak) >= 64 { // 32 bytes = 64 hex chars
+				tweakBytes = make([]byte, 32)
+				for i := 0; i < 32; i++ {
+					if i*2+1 < len(u.Label.Tweak) {
+						high := u.Label.Tweak[i*2]
+						low := u.Label.Tweak[i*2+1]
+						tweakBytes[i] = hexCharToByte(high)<<4 | hexCharToByte(low)
+					}
+				}
+			}
+
+			if len(pubKeyBytes) == 33 && len(tweakBytes) == 32 {
+				label = &bip352.Label{
+					PubKey:  bip352.ConvertToFixedLength33(pubKeyBytes),
+					Tweak:   bip352.ConvertToFixedLength32(tweakBytes),
+					Address: u.Label.Address,
+					M:       u.Label.M,
+				}
+			}
+		}
+
 		ownedUTXOs = append(ownedUTXOs, &OwnedUTXO{
 			Txid:      txid,
 			Vout:      u.Vout,
 			Amount:    u.Amount,
 			Timestamp: uint64(u.Timestamp),
 			State:     state,
+			Label:     label,
 		})
 	}
 	return ownedUTXOs

@@ -2,6 +2,7 @@ package gui
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"time"
 
@@ -35,6 +36,25 @@ type UTXODisplay struct {
 	State     string
 	Timestamp string
 	Vout      uint32 // Added Vout for enhanced display
+	Label     string // Add label information for display
+}
+
+func (g *MainGUI) UtxoCount(states ...string) int {
+	if len(states) == 0 {
+		// todo: unspent should be global defined constant
+		states = []string{"unspent"}
+	}
+	var count int
+	for _, v := range g.utxoData {
+		if len(states) > 0 {
+			if slices.Contains(states, v.State) {
+				count++
+			}
+		} else {
+			count++
+		}
+	}
+	return count
 }
 
 // NewMainGUI creates a new main GUI instance
@@ -180,12 +200,22 @@ func (g *MainGUI) refreshUTXOs() {
 
 	g.utxoData = []UTXODisplay{}
 	for _, utxo := range utxos {
+		// Format label information
+		labelText := ""
+		if utxo.Label != nil {
+			labelText = fmt.Sprintf("M=%d", utxo.Label.M)
+		}
+
+		// Format timestamp
+		timestamp := time.Unix(utxo.Timestamp, 0).Format("2006-01-02 15:04:05")
+
 		g.utxoData = append(g.utxoData, UTXODisplay{
 			TxID:      utxo.TxID,
 			Amount:    fmt.Sprintf("%d sats", utxo.Amount),
 			State:     string(utxo.State),
-			Timestamp: fmt.Sprintf("%d", utxo.Timestamp),
-			Vout:      utxo.Vout, // Add Vout to UTXODisplay
+			Timestamp: timestamp,
+			Vout:      utxo.Vout,
+			Label:     labelText,
 		})
 	}
 

@@ -136,12 +136,12 @@ func generateLabels(wallet *Wallet, labelCount int) ([]*bip352.Label, error) {
 	labels := make([]*bip352.Label, 0, labelCount)
 
 	// Convert spend secret to fixed length array
-	var spendSecret [32]byte
-	copy(spendSecret[:], wallet.SpendSecret)
+	var scanSecret [32]byte
+	copy(scanSecret[:], wallet.ScanSecret)
 
 	// Generate the specified number of labels
 	for i := range labelCount {
-		label, err := bip352.CreateLabel(spendSecret, uint32(i))
+		label, err := bip352.CreateLabel(scanSecret, uint32(i))
 		if err != nil {
 			return nil, err
 		}

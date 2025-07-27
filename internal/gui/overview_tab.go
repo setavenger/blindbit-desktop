@@ -12,68 +12,8 @@ import (
 
 // createOverviewTab creates the overview tab
 func (g *MainGUI) createOverviewTab() *fyne.Container {
-	// Enhanced UTXO table with proper table widget and built-in headers
-	g.utxoList = widget.NewTable(
-		func() (int, int) {
-			length := len(g.utxoData)
-			// fmt.Println("Length:", length)
-			return length, 3 // 3 columns: TxID:Vout, Amount, State
-		},
-		func() fyne.CanvasObject {
-			// Create a cell template with proper sizing
-			label := widget.NewLabel("wide content")
-			label.Wrapping = fyne.TextWrapWord
-			// Create a container with padding to ensure proper cell sizing
-			cellContainer := container.NewPadded(label)
-			return cellContainer
-		},
-		func(i widget.TableCellID, o fyne.CanvasObject) {
-			cellContainer := o.(*fyne.Container)
-			label := cellContainer.Objects[0].(*widget.Label)
-			if i.Row < len(g.utxoData) {
-				utxo := g.utxoData[i.Row]
-				switch i.Col {
-				case 0: // TxID:Vout combined
-					txid := utxo.TxID
-					if len(txid) > 8 {
-						txid = txid[:8] + "..."
-					}
-					label.SetText(fmt.Sprintf("%s:%d", txid, utxo.Vout))
-				case 1: // Amount
-					label.SetText(utxo.Amount)
-				case 2: // State
-					label.SetText(utxo.State)
-				}
-			}
-		},
-	)
-
-	// Enable header row and set up custom headers
-	g.utxoList.ShowHeaderRow = true
-	g.utxoList.CreateHeader = func() fyne.CanvasObject {
-		headerLabel := widget.NewLabel("Header")
-		headerLabel.TextStyle = fyne.TextStyle{Bold: true}
-		return headerLabel
-	}
-	g.utxoList.UpdateHeader = func(id widget.TableCellID, template fyne.CanvasObject) {
-		label := template.(*widget.Label)
-		switch id.Col {
-		case 0:
-			label.SetText("Transaction ID:Vout")
-		case 1:
-			label.SetText("Amount (sats)")
-		case 2:
-			label.SetText("State")
-		}
-	}
-
-	// Set column widths for better layout
-	g.utxoList.SetColumnWidth(0, 200) // TxID:Vout column
-	g.utxoList.SetColumnWidth(1, 120) // Amount column
-	g.utxoList.SetColumnWidth(2, 100) // State column
-
-	// Set row height to ensure proper table display
-	g.utxoList.SetRowHeight(0, 40) // Set a reasonable row height for all rows
+	// Use the shared UTXO table component
+	g.utxoList = g.createUTXOTable()
 
 	// Scan controls with better UX
 	scanButton := widget.NewButtonWithIcon("Start Scanning", theme.MediaPlayIcon(), func() {
