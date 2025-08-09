@@ -1,6 +1,8 @@
 package wallet
 
 import (
+	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -8,37 +10,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/rs/zerolog"
+	"github.com/setavenger/blindbit-lib/types"
+	"github.com/setavenger/blindbit-lib/wallet"
 	"github.com/setavenger/go-bip352"
 	"github.com/spf13/viper"
 	"github.com/tyler-smith/go-bip39"
+	// Import blindbit-scan structures
 )
 
-// Network represents the Bitcoin network type
-type Network string
-
-const (
-	NetworkMainnet Network = "mainnet"
-	NetworkTestnet Network = "testnet"
-	NetworkSignet  Network = "signet"
-	NetworkRegtest Network = "regtest"
-)
-
-// UTXO represents a UTXO for the GUI
-type UTXO struct {
-	TxID      string `json:"txid"`
-	Vout      uint32 `json:"vout"`
-	Amount    uint64 `json:"amount"`
-	State     string `json:"state"`
-	Timestamp int64  `json:"timestamp"`
-	Address   string `json:"address,omitempty"`
-	Label     *Label `json:"label,omitempty"` // Add label information
-}
-
-// Label represents a labeled address for the GUI
+// Label represents a labeled address for the GUI (simplified version for display)
 type Label struct {
 	PubKey  string `json:"pub_key"`
 	Tweak   string `json:"tweak"`
@@ -46,42 +28,17 @@ type Label struct {
 	M       uint32 `json:"m"`
 }
 
-// Wallet represents the core wallet data
-type Wallet struct {
-	Network     Network   `json:"network"`
-	Mnemonic    string    `json:"mnemonic"`
-	ScanSecret  []byte    `json:"scan_secret"`
-	SpendSecret []byte    `json:"spend_secret"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-}
-
-// WalletData represents the complete wallet data stored on disk
-type WalletData struct {
-	Wallet     Wallet `json:"wallet"`
-	UTXOs      []UTXO `json:"utxos"`
-	LastHeight int64  `json:"last_height"`
-}
-
 // Manager handles wallet operations and scanning
 type Manager struct {
 	config     *viper.Viper
 	dataDir    string
 	mu         sync.RWMutex
-	scanHeight int64
-	wallet     *Wallet
-	utxos      []UTXO
+	scanHeight uint64
+	wallet     *wallet.Wallet
+	utxos      []*wallet.OwnedUTXO
 	logger     zerolog.Logger // Add logger field
 
 	scanner *Scanner // Add scanner field
-}
-
-// networkParams maps network names to chain parameters
-var networkParams = map[Network]*chaincfg.Params{
-	NetworkMainnet: &chaincfg.MainNetParams,
-	NetworkTestnet: &chaincfg.TestNet3Params,
-	NetworkSignet:  &chaincfg.SigNetParams,
-	NetworkRegtest: &chaincfg.RegressionNetParams,
 }
 
 // NewManager creates a new wallet manager
@@ -130,7 +87,7 @@ func NewManager() (*Manager, error) {
 	manager := &Manager{
 		config:  config,
 		dataDir: dataDir,
-		utxos:   []UTXO{},
+		utxos:   []*wallet.OwnedUTXO{},
 		logger:  zerolog.New(os.Stdout).With().Caller().Timestamp().Logger(),
 	}
 	fmt.Println("Manager instance created successfully")
@@ -185,18 +142,18 @@ func (m *Manager) CreateWallet(seed string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	network := Network(m.config.GetString("network"))
+	network := types.Network(m.config.GetString("network"))
 	err := m.createWalletInternal(seed, network)
 	if err != nil {
 		return err
 	}
 
 	// Clear any existing UTXOs for new wallet
-	m.utxos = []UTXO{}
+	m.utxos = []*wallet.OwnedUTXO{}
 
 	// Initialize scan height to birth height for new wallets
 	birthHeight := m.config.GetUint64("birth_height")
-	m.scanHeight = int64(birthHeight - 1) // Start scanning from birth height
+	m.scanHeight = birthHeight - 1 // Start scanning from birth height
 
 	fmt.Printf("Created new wallet with scan height: %d (birth height: %d)\n", m.scanHeight, birthHeight)
 
@@ -213,7 +170,7 @@ func (m *Manager) CreateWallet(seed string) error {
 }
 
 // createWalletInternal creates a wallet with the given seed and network (assumes lock is already held)
-func (m *Manager) createWalletInternal(seed string, network Network) error {
+func (m *Manager) createWalletInternal(seed string, network types.Network) error {
 	// Validate mnemonic
 	if !bip39.IsMnemonicValid(seed) {
 		return fmt.Errorf("invalid mnemonic")
@@ -223,7 +180,7 @@ func (m *Manager) createWalletInternal(seed string, network Network) error {
 	seedBytes := bip39.NewSeed(seed, "")
 
 	// Get network parameters
-	params, ok := networkParams[network]
+	params, ok := types.NetworkParams[network]
 	if !ok {
 		return fmt.Errorf("unsupported network: %s", network)
 	}
@@ -235,19 +192,22 @@ func (m *Manager) createWalletInternal(seed string, network Network) error {
 	}
 
 	// Derive BIP352 keys
-	scanSecret, spendSecret, err := bip352.DeriveKeysFromMaster(master, network == NetworkMainnet)
+	scanSecret, spendSecret, err := bip352.DeriveKeysFromMaster(
+		master, network == types.NetworkMainnet,
+	)
+
 	if err != nil {
 		return fmt.Errorf("failed to derive keys: %w", err)
 	}
 
 	// Create wallet instance
-	m.wallet = &Wallet{
-		Network:     network,
-		Mnemonic:    seed,
-		ScanSecret:  scanSecret[:],
-		SpendSecret: spendSecret[:],
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+	m.wallet = &wallet.Wallet{
+		Network:        network,
+		Mnemonic:       seed,
+		SecretKeyScan:  scanSecret,
+		SecretKeySpend: spendSecret,
+		PubKeyScan:     *bip352.PubKeyFromSecKey(&scanSecret),
+		PubKeySpend:    *bip352.PubKeyFromSecKey(&spendSecret),
 	}
 
 	// Save wallet configuration
@@ -277,7 +237,7 @@ func (m *Manager) LoadWallet() error {
 	}
 	fmt.Printf("Wallet file read, size: %d bytes\n", len(data))
 
-	var walletData WalletData
+	var walletData wallet.Wallet
 	fmt.Println("Unmarshaling wallet data...")
 	if err := json.Unmarshal(data, &walletData); err != nil {
 		fmt.Printf("Error unmarshaling wallet data: %v\n", err)
@@ -285,9 +245,9 @@ func (m *Manager) LoadWallet() error {
 	}
 	fmt.Println("Wallet data unmarshaled successfully")
 
-	m.wallet = &walletData.Wallet
+	m.wallet = &walletData
 	m.utxos = walletData.UTXOs
-	m.scanHeight = walletData.LastHeight
+	m.scanHeight = walletData.LastScanHeight
 
 	if err := m.setupScanner(); err != nil {
 		return err
@@ -312,31 +272,20 @@ func (m *Manager) GetAddress() (string, error) {
 
 	// Create address using BIP352
 	network := m.wallet.Network
-	mainnet := network == NetworkMainnet
+	mainnet := network == types.NetworkMainnet
 	fmt.Printf("Network: %s, Mainnet: %v\n", network, mainnet)
 
-	// Get scan and spend secrets
-	fmt.Println("Getting scan and spend secrets...")
-	scanSecret := [32]byte{}
-	copy(scanSecret[:], m.wallet.ScanSecret)
-	spendSecret := [32]byte{}
-	copy(spendSecret[:], m.wallet.SpendSecret)
-
-	// Derive scan public key from scan secret
-	fmt.Println("Deriving scan public key...")
-	_, scanPubKey := btcec.PrivKeyFromBytes(scanSecret[:])
-	scanPubKeyBytes := scanPubKey.SerializeCompressed()
-	fmt.Println("Scan public key derived")
-
-	// Derive spend public key from spend secret
-	fmt.Println("Deriving spend public key...")
-	_, spendPubKey := btcec.PrivKeyFromBytes(spendSecret[:])
-	spendPubKeyBytes := spendPubKey.SerializeCompressed()
-	fmt.Println("Spend public key derived")
+	scanPubKey := bip352.PubKeyFromSecKey(m.wallet.SecretKeyScan.ToArrayPtr())
+	spendPubKey := bip352.PubKeyFromSecKey(m.wallet.SecretKeySpend.ToArrayPtr())
 
 	// Create address
 	fmt.Println("Creating BIP352 address...")
-	address, err := bip352.CreateAddress(bip352.ConvertToFixedLength33(scanPubKeyBytes), bip352.ConvertToFixedLength33(spendPubKeyBytes), mainnet, 0)
+	address, err := bip352.CreateAddress(
+		scanPubKey,
+		spendPubKey,
+		mainnet,
+		0,
+	)
 	if err != nil {
 		fmt.Printf("Error creating address: %v\n", err)
 		return "", fmt.Errorf("failed to create address: %w", err)
@@ -347,13 +296,59 @@ func (m *Manager) GetAddress() (string, error) {
 }
 
 // GetUTXOs returns all UTXOs from the scan wallet
-func (m *Manager) GetUTXOs() ([]UTXO, error) {
+func (m *Manager) GetUTXOs() ([]*wallet.OwnedUTXO, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	// For now, return stored UTXOs
 	// TODO: Integrate with actual blindbit-scan scanning
 	return m.utxos, nil
+}
+
+// GetUTXOsForGUI returns UTXOs in a GUI-friendly format
+func (m *Manager) GetUTXOsForGUI() ([]*UTXOGUI, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var guiUTXOs []*UTXOGUI
+	for _, utxo := range m.utxos {
+		// Convert label if present
+		var label *Label
+		if utxo.Label != nil {
+			label = &Label{
+				PubKey:  fmt.Sprintf("%x", utxo.Label.PubKey[:]),
+				Tweak:   fmt.Sprintf("%x", utxo.Label.Tweak[:]),
+				Address: utxo.Label.Address,
+				M:       utxo.Label.M,
+			}
+		}
+
+		guiUTXO := &UTXOGUI{
+			TxID:         fmt.Sprintf("%x", utxo.Txid[:]),
+			Vout:         utxo.Vout,
+			Amount:       utxo.Amount,
+			State:        utxo.State.String(),
+			Timestamp:    int64(utxo.Timestamp),
+			PrivKeyTweak: fmt.Sprintf("%x", utxo.PrivKeyTweak[:]),
+			PubKey:       fmt.Sprintf("%x", utxo.PubKey[:]),
+			Label:        label,
+		}
+		guiUTXOs = append(guiUTXOs, guiUTXO)
+	}
+
+	return guiUTXOs, nil
+}
+
+// UTXOGUI represents a UTXO for the GUI display
+type UTXOGUI struct {
+	TxID         string `json:"txid"`
+	Vout         uint32 `json:"vout"`
+	Amount       uint64 `json:"amount"`
+	State        string `json:"state"`
+	Timestamp    int64  `json:"timestamp"`
+	PrivKeyTweak string `json:"priv_key_tweak"`
+	PubKey       string `json:"pub_key"`
+	Label        *Label `json:"label,omitempty"`
 }
 
 // SendTransaction sends a transaction
@@ -365,9 +360,24 @@ func (m *Manager) SendTransaction(address string, amount int64, feeRate int64) (
 		return "", fmt.Errorf("no wallet loaded")
 	}
 
+	var recipientsImpl = []wallet.RecipientImpl{
+		{
+			Address:  address,
+			Amount:   uint64(amount),
+			PkScript: []byte{},
+		},
+	}
+
+	recipients := make([]wallet.Recipient, len(recipientsImpl))
+	for i := range recipientsImpl {
+		recipients[i] = &recipientsImpl[i]
+	}
+
+	txBytes, err := m.wallet.SendToRecipients(recipients, m.utxos, feeRate, 1000, true, false)
+
 	// For now, return a mock transaction ID
 	// TODO: Integrate with actual blindbit-wallet-cli sending functionality
-	return "mock_txid_1234567890abcdef", nil
+	return hex.EncodeToString(txBytes), err
 }
 
 // StartScanning starts the scanning process
@@ -407,7 +417,7 @@ func (m *Manager) StopScanning() {
 		return
 	}
 
-	m.logger.Info().Int64("current_height", m.scanHeight).Msg("stopping scan")
+	m.logger.Info().Uint64("current_height", m.scanHeight).Msg("stopping scan")
 	m.scanner.Stop()
 	m.logger.Info().Msg("stop signal sent to scanner")
 
@@ -432,7 +442,7 @@ func (m *Manager) IsScanning() bool {
 }
 
 // UpdateScanHeight updates the scan height (for real-time UI updates)
-func (m *Manager) UpdateScanHeight(height int64) {
+func (m *Manager) UpdateScanHeight(height uint64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if height > m.scanHeight {
@@ -441,7 +451,7 @@ func (m *Manager) UpdateScanHeight(height int64) {
 }
 
 // GetScanHeight returns the current scan height
-func (m *Manager) GetScanHeight() int64 {
+func (m *Manager) GetScanHeight() uint64 {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.scanHeight
@@ -453,15 +463,11 @@ func (m *Manager) saveWalletConfig() error {
 		return fmt.Errorf("no wallet to save")
 	}
 
-	// Create wallet data
-	walletData := WalletData{
-		Wallet:     *m.wallet,
-		UTXOs:      m.utxos,
-		LastHeight: m.scanHeight,
-	}
+	m.wallet.UTXOs = m.utxos
+	m.wallet.LastScanHeight = m.scanHeight
 
 	// Marshal to JSON
-	jsonData, err := json.MarshalIndent(walletData, "", "  ")
+	jsonData, err := json.MarshalIndent(m.wallet, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal wallet data: %w", err)
 	}
@@ -494,7 +500,7 @@ func (m *Manager) GetBalance() uint64 {
 	var balance uint64
 	var unspentCount int
 	for _, utxo := range m.utxos {
-		if utxo.State == "unspent" {
+		if utxo.State == wallet.StateUnspent {
 			balance += utxo.Amount
 			unspentCount++
 		}
@@ -504,7 +510,7 @@ func (m *Manager) GetBalance() uint64 {
 }
 
 // SetNetwork changes the network and refreshes the wallet
-func (m *Manager) SetNetwork(network Network) error {
+func (m *Manager) SetNetwork(network types.Network) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -531,8 +537,8 @@ func (m *Manager) SetNetwork(network Network) error {
 }
 
 // GetNetwork returns the current network
-func (m *Manager) GetNetwork() Network {
-	return Network(m.config.GetString("network"))
+func (m *Manager) GetNetwork() types.Network {
+	return types.Network(m.config.GetString("network"))
 }
 
 // SetOracleURL sets the oracle server URL
@@ -628,29 +634,47 @@ func (m *Manager) UpdateUTXOsFromScanner() {
 		return
 	}
 
-	// Get UTXOs from scanner
+	// Get UTXOs from scanner (now returns wallet.OwnedUTXO directly)
 	scannerUTXOs := m.scanner.GetAllOwnedUTXOs()
 
-	// Convert to GUI format and merge with existing UTXOs
-	oldCount := len(m.utxos)
-	newUTXOs := convertOwnedUTXOsToGUI(scannerUTXOs)
+	// convert scan to lib utxos
+	// todo: change in blindbit scan as well
+	var scannedUtxos = make([]*wallet.OwnedUTXO, len(scannerUTXOs))
+	for i := range scannedUtxos {
+		v := scannerUTXOs[i]
+		scannedUtxos[i] = &wallet.OwnedUTXO{
+			Txid:         v.Txid,
+			Vout:         v.Vout,
+			Amount:       v.Amount,
+			PrivKeyTweak: v.PrivKeyTweak,
+			PubKey:       v.PubKey,
+			Timestamp:    v.Timestamp,
+			State:        wallet.UTXOState(v.State),
+			Label:        v.Label,
+		}
+	}
 
 	// Create a map of existing UTXOs for efficient lookup
-	existingUTXOs := make(map[string]UTXO)
+	existingUTXOs := make(map[[36]byte]*wallet.OwnedUTXO)
+	oldCount := len(m.utxos)
 	for _, utxo := range m.utxos {
-		key := fmt.Sprintf("%s:%d", utxo.TxID, utxo.Vout)
+		var key [36]byte
+		copy(key[:], utxo.Txid[:])
+		binary.PutUvarint(key[32:], uint64(utxo.Vout))
 		existingUTXOs[key] = utxo
 	}
 
 	// Merge new UTXOs with existing ones, updating existing ones
-	for _, newUTXO := range newUTXOs {
+	for _, newUTXO := range scannedUtxos {
 		// todo: optimize to byte array key
-		key := fmt.Sprintf("%s:%d", newUTXO.TxID, newUTXO.Vout)
+		var key [36]byte
+		copy(key[:], newUTXO.Txid[:])
+		binary.PutUvarint(key[32:], uint64(newUTXO.Vout))
 		existingUTXOs[key] = newUTXO
 	}
 
 	// Convert back to slice
-	m.utxos = make([]UTXO, 0, len(existingUTXOs))
+	m.utxos = make([]*wallet.OwnedUTXO, 0, len(existingUTXOs))
 	for _, utxo := range existingUTXOs {
 		m.utxos = append(m.utxos, utxo)
 	}
@@ -681,7 +705,7 @@ func (m *Manager) setupScanner() error {
 		Str("electrum_url", electrumURL).
 		Uint64("birth_height", birthHeight).
 		Int("label_count", labelCount).
-		Int64("saved_scan_height", m.scanHeight).
+		Uint64("saved_scan_height", m.scanHeight).
 		Msg("setting up scanner")
 
 	scanner, err := NewScanner(oracleURL, electrumURL, m.wallet, &m.logger, labelCount)
@@ -696,149 +720,61 @@ func (m *Manager) setupScanner() error {
 	if m.scanHeight > 0 {
 		scanner.SetLastScanHeight(uint64(m.scanHeight))
 		m.logger.Info().
-			Int64("last_scan_height", m.scanHeight).
+			Uint64("last_scan_height", m.scanHeight).
 			Msg("restored last scan height")
 	}
 
 	// Load existing UTXOs into the scanner
 	if len(m.utxos) > 0 {
-		existingOwnedUTXOs := convertGUIUTXOsToOwned(m.utxos)
-		scanner.LoadExistingUTXOs(existingOwnedUTXOs)
+		// convert lib to scan utxos
+		// todo: change in blindbit scan as well
+		// var convertedUtxos = make([]*scanwallet.OwnedUTXO, len(m.utxos))
+		// for i := range m.utxos {
+		// 	v := m.utxos[i]
+		// 	convertedUtxos[i] = &scanwallet.OwnedUTXO{
+		// 		Txid:         v.Txid,
+		// 		Vout:         v.Vout,
+		// 		Amount:       v.Amount,
+		// 		PrivKeyTweak: v.PrivKeyTweak,
+		// 		PubKey:       v.PubKey,
+		// 		Timestamp:    v.Timestamp,
+		// 		State:        scanwallet.UTXOState(v.State),
+		// 		Label:        v.Label,
+		// 	}
+		// }
+
+		// The scanner now uses wallet.OwnedUTXO directly, so we can pass them directly
+		scanner.LoadExistingUTXOs(m.utxos)
 		m.logger.Info().
-			Int("utxos_loaded", len(existingOwnedUTXOs)).
+			Int("utxos_loaded", len(m.utxos)).
 			Msg("loaded existing UTXOs into scanner")
 	}
 
 	// Set up progress callback for real-time updates
 	scanner.SetProgressCallback(func(height uint64) {
-		m.UpdateScanHeight(int64(height))
+		m.UpdateScanHeight(height)
 
 		// Update UTXOs from scanner every 100 blocks to reduce log noise
 		if height%100 == 0 {
 			m.UpdateUTXOsFromScanner()
 		}
+
+		// Also update UTXOs immediately when we reach the chain tip
+		// This ensures we get the latest data even if we don't hit the 100-block interval
+		chainTip, err := scanner.client.GetChainTip()
+		if err == nil && height >= chainTip {
+			m.UpdateUTXOsFromScanner()
+		}
+	})
+
+	// Set up UTXO update callback for immediate updates when new UTXOs are found
+	scanner.SetUTXOUpdateCallback(func() {
+		m.UpdateUTXOsFromScanner()
 	})
 
 	m.scanner = scanner
 	m.logger.Info().Msg("scanner setup completed")
 	return nil
-}
-
-// Add this helper function to convert scanner UTXOs to GUI UTXOs:
-func convertOwnedUTXOsToGUI(owned []*OwnedUTXO) []UTXO {
-	var guiUTXOs []UTXO
-	for _, u := range owned {
-		// Convert label if present
-		var label *Label
-		if u.Label != nil {
-			label = &Label{
-				PubKey:  fmt.Sprintf("%x", u.Label.PubKey[:]),
-				Tweak:   fmt.Sprintf("%x", u.Label.Tweak[:]),
-				Address: u.Label.Address,
-				M:       u.Label.M,
-			}
-		}
-
-		guiUTXOs = append(guiUTXOs, UTXO{
-			TxID:      fmt.Sprintf("%x", u.Txid[:]),
-			Vout:      u.Vout,
-			Amount:    u.Amount,
-			State:     u.State.String(),
-			Timestamp: int64(u.Timestamp),
-			Address:   "", // Optionally fill if you have address info
-			Label:     label,
-		})
-	}
-	return guiUTXOs
-}
-
-// Add this helper function to convert GUI UTXOs to owned UTXOs:
-func convertGUIUTXOsToOwned(guiUTXOs []UTXO) []*OwnedUTXO {
-	var ownedUTXOs []*OwnedUTXO
-	for _, u := range guiUTXOs {
-		var txid [32]byte
-		if len(u.TxID) >= 64 {
-			// Parse hex string to bytes
-			for i := 0; i < 32; i++ {
-				if i*2+1 < len(u.TxID) {
-					// Simple hex parsing - in production you might want to use encoding/hex
-					high := u.TxID[i*2]
-					low := u.TxID[i*2+1]
-					txid[i] = hexCharToByte(high)<<4 | hexCharToByte(low)
-				}
-			}
-		}
-
-		state := StateUnspent
-		switch u.State {
-		case "spent":
-			state = StateSpent
-		case "unconfirmed_spent":
-			state = StateUnconfirmedSpent
-		case "unconfirmed":
-			state = StateUnconfirmed
-		}
-
-		// Convert label if present
-		var label *bip352.Label
-		if u.Label != nil {
-			// Parse pubkey and tweak from hex strings
-			var pubKeyBytes, tweakBytes []byte
-			if len(u.Label.PubKey) >= 66 { // 33 bytes = 66 hex chars
-				pubKeyBytes = make([]byte, 33)
-				for i := 0; i < 33; i++ {
-					if i*2+1 < len(u.Label.PubKey) {
-						high := u.Label.PubKey[i*2]
-						low := u.Label.PubKey[i*2+1]
-						pubKeyBytes[i] = hexCharToByte(high)<<4 | hexCharToByte(low)
-					}
-				}
-			}
-			if len(u.Label.Tweak) >= 64 { // 32 bytes = 64 hex chars
-				tweakBytes = make([]byte, 32)
-				for i := 0; i < 32; i++ {
-					if i*2+1 < len(u.Label.Tweak) {
-						high := u.Label.Tweak[i*2]
-						low := u.Label.Tweak[i*2+1]
-						tweakBytes[i] = hexCharToByte(high)<<4 | hexCharToByte(low)
-					}
-				}
-			}
-
-			if len(pubKeyBytes) == 33 && len(tweakBytes) == 32 {
-				label = &bip352.Label{
-					PubKey:  bip352.ConvertToFixedLength33(pubKeyBytes),
-					Tweak:   bip352.ConvertToFixedLength32(tweakBytes),
-					Address: u.Label.Address,
-					M:       u.Label.M,
-				}
-			}
-		}
-
-		ownedUTXOs = append(ownedUTXOs, &OwnedUTXO{
-			Txid:      txid,
-			Vout:      u.Vout,
-			Amount:    u.Amount,
-			Timestamp: uint64(u.Timestamp),
-			State:     state,
-			Label:     label,
-		})
-	}
-	return ownedUTXOs
-}
-
-// Helper function to convert hex character to byte
-func hexCharToByte(c byte) byte {
-	switch {
-	case c >= '0' && c <= '9':
-		return c - '0'
-	case c >= 'a' && c <= 'f':
-		return c - 'a' + 10
-	case c >= 'A' && c <= 'F':
-		return c - 'A' + 10
-	default:
-		return 0
-	}
 }
 
 // RefreshUTXOs manually refreshes UTXOs from the scanner
@@ -851,7 +787,7 @@ func (m *Manager) ClearUTXOs() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.utxos = []UTXO{}
+	m.utxos = []*wallet.OwnedUTXO{}
 
 	if m.scanner != nil {
 		m.scanner.ClearUTXOs()
@@ -873,9 +809,9 @@ func (m *Manager) GetUTXOStats() (total int, unspent int, spent int) {
 	total = len(m.utxos)
 	for _, utxo := range m.utxos {
 		switch utxo.State {
-		case "unspent":
+		case wallet.StateUnspent:
 			unspent++
-		case "spent":
+		case wallet.StateSpent:
 			spent++
 		}
 	}
@@ -903,7 +839,7 @@ func (m *Manager) RescanFromHeight(height uint64) error {
 
 	// Update the scan height
 	oldHeight := m.scanHeight
-	m.scanHeight = int64(height - 1) // Set to height-1 so scanning starts from the specified height
+	m.scanHeight = height - 1 // Set to height-1 so scanning starts from the specified height
 
 	fmt.Printf("[RescanFromHeight] Resetting scan height from %d to %d\n", oldHeight, m.scanHeight)
 
@@ -940,14 +876,14 @@ func (m *Manager) ForceRescanFromHeight(height uint64) error {
 
 	// Clear all existing UTXOs
 	oldUTXOCount := len(m.utxos)
-	m.utxos = []UTXO{}
+	m.utxos = []*wallet.OwnedUTXO{}
 	m.scanner.ClearUTXOs()
 
 	fmt.Printf("[ForceRescanFromHeight] Cleared %d existing UTXOs\n", oldUTXOCount)
 
 	// Update the scan height
 	oldHeight := m.scanHeight
-	m.scanHeight = int64(height - 1) // Set to height-1 so scanning starts from the specified height
+	m.scanHeight = height - 1 // Set to height-1 so scanning starts from the specified height
 
 	fmt.Printf("[ForceRescanFromHeight] Resetting scan height from %d to %d\n", oldHeight, m.scanHeight)
 
@@ -993,4 +929,42 @@ func (m *Manager) ForceRescanFromTip() error {
 
 	fmt.Printf("[ForceRescanFromTip] Force rescanning from chain tip: %d\n", chainTip)
 	return m.ForceRescanFromHeight(chainTip)
+}
+
+// GetChainTip returns the current chain tip
+func (m *Manager) GetChainTip() (uint64, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.scanner == nil {
+		return 0, fmt.Errorf("scanner not initialized")
+	}
+
+	return m.scanner.client.GetChainTip()
+}
+
+// GetSyncStatus returns the sync status as a percentage
+func (m *Manager) GetSyncStatus() (uint64, uint64, float64) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.scanner == nil {
+		return 0, 0, 0.0
+	}
+
+	chainTip, err := m.scanner.client.GetChainTip()
+	if err != nil {
+		return uint64(m.scanHeight), 0, 0.0
+	}
+
+	if chainTip == 0 {
+		return uint64(m.scanHeight), 0, 0.0
+	}
+
+	percentage := float64(m.scanHeight) / float64(chainTip) * 100.0
+	if percentage > 100.0 {
+		percentage = 100.0
+	}
+
+	return uint64(m.scanHeight), chainTip, percentage
 }

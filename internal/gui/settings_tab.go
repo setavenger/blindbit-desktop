@@ -9,14 +9,14 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
-	"github.com/setavenger/blindbit-desktop/internal/wallet"
+	"github.com/setavenger/blindbit-lib/types"
 )
 
 // createSettingsTab creates the settings tab
 func (g *MainGUI) createSettingsTab() *fyne.Container {
 	// Network selection
 	networkSelect := widget.NewSelect([]string{"testnet", "mainnet", "signet", "regtest"}, func(value string) {
-		if err := g.walletManager.SetNetwork(wallet.Network(value)); err != nil {
+		if err := g.walletManager.SetNetwork(types.Network(value)); err != nil {
 			dialog.ShowError(fmt.Errorf("failed to change network: %v", err), g.window)
 			return
 		}

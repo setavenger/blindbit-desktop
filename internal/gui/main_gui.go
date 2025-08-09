@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"encoding/hex"
 	"fmt"
 	"slices"
 	"sort"
@@ -22,6 +23,7 @@ type MainGUI struct {
 	balanceLabel    *widget.Label
 	scanStatusLabel *widget.Label
 	scanHeightLabel *widget.Label
+	chainTipLabel   *widget.Label
 	oracleInfoLabel *widget.Label
 	utxoList        *widget.Table
 	utxoData        []UTXODisplay
@@ -107,6 +109,7 @@ func (g *MainGUI) createMainScreen() *fyne.Container {
 	g.balanceLabel = widget.NewLabel("Balance: Loading...")
 	g.scanStatusLabel = widget.NewLabel("Scan Status: Not Scanning")
 	g.scanHeightLabel = widget.NewLabel("Scan Height: 0")
+	g.chainTipLabel = widget.NewLabel("Chain Tip: Loading...")
 	g.oracleInfoLabel = widget.NewLabel("Oracle: Loading...")
 
 	// Update wallet info
@@ -133,6 +136,7 @@ func (g *MainGUI) createMainScreen() *fyne.Container {
 		g.balanceLabel,
 		g.scanStatusLabel,
 		g.scanHeightLabel,
+		g.chainTipLabel,
 		widget.NewSeparator(),
 	)
 
@@ -170,6 +174,24 @@ func (g *MainGUI) updateWalletInfo() {
 	scanHeight := g.walletManager.GetScanHeight()
 	g.scanHeightLabel.SetText(fmt.Sprintf("Scan Height: %d", scanHeight))
 
+	// Update chain tip and sync status
+	_, chainTip, syncPercentage := g.walletManager.GetSyncStatus()
+	if chainTip > 0 {
+		g.chainTipLabel.SetText(fmt.Sprintf("Chain Tip: %d (%.1f%% synced)", chainTip, syncPercentage))
+
+		// Color code the sync status
+		if syncPercentage >= 100.0 {
+			g.chainTipLabel.TextStyle = fyne.TextStyle{Bold: true}
+		} else if syncPercentage >= 90.0 {
+			g.chainTipLabel.TextStyle = fyne.TextStyle{Bold: true}
+		} else {
+			g.chainTipLabel.TextStyle = fyne.TextStyle{}
+		}
+	} else {
+		g.chainTipLabel.SetText("Chain Tip: Loading...")
+		g.chainTipLabel.TextStyle = fyne.TextStyle{}
+	}
+
 	oracleUrl := g.walletManager.GetOracleURL()
 	// Update oracle info
 	g.oracleInfoLabel.SetText(fmt.Sprintf("Oracle: %s", oracleUrl))
@@ -179,6 +201,7 @@ func (g *MainGUI) updateWalletInfo() {
 	g.balanceLabel.Refresh()
 	g.scanStatusLabel.Refresh()
 	g.scanHeightLabel.Refresh()
+	g.chainTipLabel.Refresh()
 	g.oracleInfoLabel.Refresh()
 }
 
@@ -207,12 +230,12 @@ func (g *MainGUI) refreshUTXOs() {
 		}
 
 		// Format timestamp
-		timestamp := time.Unix(utxo.Timestamp, 0).Format("2006-01-02 15:04:05")
+		timestamp := time.Unix(int64(utxo.Timestamp), 0).Format("2006-01-02 15:04:05")
 
 		g.utxoData = append(g.utxoData, UTXODisplay{
-			TxID:      utxo.TxID,
+			TxID:      hex.EncodeToString(utxo.Txid[:]),
 			Amount:    fmt.Sprintf("%d sats", utxo.Amount),
-			State:     string(utxo.State),
+			State:     utxo.State.String(),
 			Timestamp: timestamp,
 			Vout:      utxo.Vout,
 			Label:     labelText,

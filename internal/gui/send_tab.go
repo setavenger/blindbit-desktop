@@ -51,11 +51,11 @@ func (g *MainGUI) sendTransaction(address, amountStr, feeRateStr string) {
 		return
 	}
 
-	txid, err := g.walletManager.SendTransaction(address, amount, feeRate)
+	txHex, err := g.walletManager.SendTransaction(address, amount, feeRate)
 	if err != nil {
 		dialog.ShowError(fmt.Errorf("failed to send transaction: %v", err), g.window)
 		return
 	}
 
-	dialog.ShowInformation("Success", "Transaction sent successfully\nTxID: "+txid, g.window)
+	fmt.Println("txHex:", txHex)
 }

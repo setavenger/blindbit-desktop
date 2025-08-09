@@ -17,6 +17,7 @@ func (g *MainGUI) createUTXOOverviewTab() *fyne.Container {
 	unspentLabel := widget.NewLabel("Unspent UTXOs: 0")
 	spentLabel := widget.NewLabel("Spent UTXOs: 0")
 	balanceLabel := widget.NewLabel("Total Balance: 0 sats")
+	syncStatusLabel := widget.NewLabel("Sync Status: Loading...")
 
 	// Update statistics function
 	updateStats := func() {
@@ -28,10 +29,19 @@ func (g *MainGUI) createUTXOOverviewTab() *fyne.Container {
 		spentLabel.SetText(fmt.Sprintf("Spent UTXOs: %d", spent))
 		balanceLabel.SetText(fmt.Sprintf("Total Balance: %d sats", balance))
 
+		// Update sync status
+		_, chainTip, syncPercentage := g.walletManager.GetSyncStatus()
+		if chainTip > 0 {
+			syncStatusLabel.SetText(fmt.Sprintf("Sync Status: %.1f%% (Chain Tip: %d)", syncPercentage, chainTip))
+		} else {
+			syncStatusLabel.SetText("Sync Status: Loading...")
+		}
+
 		totalLabel.Refresh()
 		unspentLabel.Refresh()
 		spentLabel.Refresh()
 		balanceLabel.Refresh()
+		syncStatusLabel.Refresh()
 	}
 
 	// Use the shared UTXO table component
@@ -70,6 +80,7 @@ func (g *MainGUI) createUTXOOverviewTab() *fyne.Container {
 		unspentLabel,
 		spentLabel,
 		balanceLabel,
+		syncStatusLabel,
 		widget.NewSeparator(),
 	)
 
