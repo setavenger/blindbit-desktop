@@ -12,6 +12,7 @@ import (
 
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
 	"github.com/rs/zerolog"
+	"github.com/setavenger/blindbit-lib/logging"
 	"github.com/setavenger/blindbit-lib/types"
 	"github.com/setavenger/blindbit-lib/wallet"
 	"github.com/setavenger/go-bip352"
@@ -88,7 +89,8 @@ func NewManager() (*Manager, error) {
 		config:  config,
 		dataDir: dataDir,
 		utxos:   []*wallet.OwnedUTXO{},
-		logger:  zerolog.New(os.Stdout).With().Caller().Timestamp().Logger(),
+		// logger:  zerolog.New(os.Stdout).With().Caller().Timestamp().Logger(),
+		logger: logging.L,
 	}
 	fmt.Println("Manager instance created successfully")
 	return manager, nil
