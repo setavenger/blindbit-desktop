@@ -59,6 +59,7 @@ func (s *Scanner) Start() error {
 
 			if err != nil {
 				s.logger.Error().Err(err).Msg("error during scanning")
+				s.stopChan <- struct{}{}
 			} else {
 				// Final UTXO update when scanning completes successfully
 				if s.progressCallback != nil {

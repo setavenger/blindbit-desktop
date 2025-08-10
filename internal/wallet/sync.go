@@ -2,11 +2,18 @@ package wallet
 
 import (
 	"fmt"
+	"runtime"
 	"sync"
 	"time"
 
 	"github.com/setavenger/blindbit-lib/wallet"
 )
+
+// At the top of the file, set CPU limit
+func init() {
+	// Use 75% of available cores (leaves some for other processes)
+	runtime.GOMAXPROCS(runtime.NumCPU() * 3 / 4)
+}
 
 // SyncToTipWithProgress syncs from the last scan height to the current chain tip with progress callback
 func (s *Scanner) SyncToTipWithProgress(progressCallback func(uint64)) error {
@@ -37,18 +44,17 @@ func (s *Scanner) SyncToTipWithProgress(progressCallback func(uint64)) error {
 
 	var stopFlag bool
 
-	dataCollector := make(map[uint64]*BlockData, 10) // backlog to be collected
+	dataCollector := make(map[uint64]*BlockData) // backlog to be collected
 	errChan := make(chan error)
-	dataChan := make(chan *BlockData, 4) // 4 might be random and unnecessary
+	dataChan := make(chan *BlockData, 100)
 
-	finisherChan := make(chan *BlockData)
+	finisherChan := make(chan *BlockData, 50)
 
 	var mu sync.Mutex
 
 	// fetch Routine
 	go func() {
-		semaphore := make(chan struct{}, 48) // Limit concurrent goroutines
-
+		semaphore := make(chan struct{}, 200) // Limit concurrent goroutines
 		for i := startHeight; i <= chainTip; i++ {
 			semaphore <- struct{}{} // Acquire semaphore
 			select {
@@ -79,15 +85,15 @@ func (s *Scanner) SyncToTipWithProgress(progressCallback func(uint64)) error {
 
 	// processing in parallel as well finishing is done sequentially
 	go func() {
-		semaphore := make(chan struct{}, 48) // Limit concurrent goroutines
+		// semaphore := make(chan struct{}, 48) // Limit concurrent goroutines
 		for !stopFlag {
-			semaphore <- struct{}{} // Acquire semaphore
+			// semaphore <- struct{}{} // Acquire semaphore
 			// s.logger.Debug().Msg("waiting for fetched blocks")
 			select {
 			case blockData := <-dataChan:
 				processTiming := time.Now()
 				func() {
-					defer func() { <-semaphore }() // Release semaphore
+					// defer func() { <-semaphore }() // Release semaphore
 					// Time how long this block waited in the channel
 					height := blockData.Height
 
@@ -114,7 +120,9 @@ func (s *Scanner) SyncToTipWithProgress(progressCallback func(uint64)) error {
 		select {
 		case err := <-errChan:
 			s.logger.Err(err).Msg("scanning failed")
+			return err
 		case blockData := <-finisherChan:
+			finishingTime := time.Now()
 			height := blockData.Height
 
 			if height > s.lastScanHeight+1 {
@@ -142,6 +150,7 @@ func (s *Scanner) SyncToTipWithProgress(progressCallback func(uint64)) error {
 
 			// Log the time for just this individual block from channel to completion
 			s.logger.Debug().Uint64("height", height).
+				Dur("finishing_duration", time.Since(finishingTime)).
 				Msg("individual block processed")
 
 			var foundNextBlock bool = true
