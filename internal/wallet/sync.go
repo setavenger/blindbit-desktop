@@ -3,12 +3,18 @@ package wallet
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/setavenger/blindbit-lib/wallet"
 )
 
 // SyncToTipWithProgress syncs from the last scan height to the current chain tip with progress callback
 func (s *Scanner) SyncToTipWithProgress(progressCallback func(uint64)) error {
+	syncStart := time.Now()
+	defer func() {
+		s.logger.Info().Dur("total_sync_duration", time.Since(syncStart)).Msg("sync completed")
+	}()
+
 	chainTip, err := s.client.GetChainTip()
 	if err != nil {
 		return fmt.Errorf("failed to get chain tip: %w", err)
@@ -35,11 +41,13 @@ func (s *Scanner) SyncToTipWithProgress(progressCallback func(uint64)) error {
 	errChan := make(chan error)
 	dataChan := make(chan *BlockData, 4) // 4 might be random and unnecessary
 
+	finisherChan := make(chan *BlockData)
+
 	var mu sync.Mutex
 
 	// fetch Routine
 	go func() {
-		semaphore := make(chan struct{}, 24) // Limit concurrent goroutines
+		semaphore := make(chan struct{}, 48) // Limit concurrent goroutines
 
 		for i := startHeight; i <= chainTip; i++ {
 			semaphore <- struct{}{} // Acquire semaphore
@@ -69,12 +77,46 @@ func (s *Scanner) SyncToTipWithProgress(progressCallback func(uint64)) error {
 		}
 	}()
 
-	// process routine
+	// processing in parallel as well finishing is done sequentially
+	go func() {
+		semaphore := make(chan struct{}, 48) // Limit concurrent goroutines
+		for !stopFlag {
+			semaphore <- struct{}{} // Acquire semaphore
+			// s.logger.Debug().Msg("waiting for fetched blocks")
+			select {
+			case blockData := <-dataChan:
+				processTiming := time.Now()
+				func() {
+					defer func() { <-semaphore }() // Release semaphore
+					// Time how long this block waited in the channel
+					height := blockData.Height
+
+					var ownedUTXOs []*wallet.OwnedUTXO
+					ownedUTXOs, err = s.ProcessBlockData(blockData)
+					if err != nil {
+						s.logger.Err(err).Uint64("height", height).Msg("failed to process block data")
+						errChan <- err
+						return
+					}
+					blockData.OwnedUTXOs = ownedUTXOs
+					finisherChan <- blockData
+				}()
+				processDuration := time.Since(processTiming)
+				s.logger.Debug().Uint64("height", blockData.Height).
+					Dur("process_duration", processDuration).
+					Msg("block processed")
+			}
+		}
+	}()
+
+	// block finishing has to be done sequentially. Spent utxos will not be consistent... maybe?
 	for !stopFlag {
-		// s.logger.Debug().Msg("waiting for fetched blocks")
 		select {
-		case blockData := <-dataChan:
+		case err := <-errChan:
+			s.logger.Err(err).Msg("scanning failed")
+		case blockData := <-finisherChan:
 			height := blockData.Height
+
 			if height > s.lastScanHeight+1 {
 				// store away as we need to process in order
 				mu.Lock()
@@ -82,14 +124,7 @@ func (s *Scanner) SyncToTipWithProgress(progressCallback func(uint64)) error {
 				mu.Unlock()
 			}
 
-			var ownedUTXOs []*wallet.OwnedUTXO
-			ownedUTXOs, err = s.ProcessBlockData(blockData)
-			if err != nil {
-				s.logger.Err(err).Uint64("height", height).Msg("failed to process block data")
-				return err
-			}
-
-			err = s.FinishBlock(height, ownedUTXOs)
+			err = s.FinishBlock(blockData)
 			if err != nil {
 				s.logger.Err(err).Uint64("height", height).Msg("failed to finish block")
 				return err
@@ -105,22 +140,18 @@ func (s *Scanner) SyncToTipWithProgress(progressCallback func(uint64)) error {
 				s.logger.Debug().Uint64("height", height).Msg("saving progress")
 			}
 
-			// we check if the next block is in the collector
-			// if so we pull and process and try for the next height up again until one does not exist
+			// Log the time for just this individual block from channel to completion
+			s.logger.Debug().Uint64("height", height).
+				Msg("individual block processed")
+
 			var foundNextBlock bool = true
 			for foundNextBlock {
 				height++
 				if blockData, foundNextBlock = dataCollector[height]; !foundNextBlock {
 					continue
 				}
-				var ownedUTXOs []*wallet.OwnedUTXO
-				ownedUTXOs, err = s.ProcessBlockData(blockData)
-				if err != nil {
-					s.logger.Err(err).Uint64("height", height).Msg("failed to process block data")
-					return err
-				}
 
-				err = s.FinishBlock(height, ownedUTXOs)
+				err = s.FinishBlock(blockData)
 				if err != nil {
 					s.logger.Err(err).Uint64("height", height).Msg("failed to finish block")
 					return err
@@ -135,6 +166,10 @@ func (s *Scanner) SyncToTipWithProgress(progressCallback func(uint64)) error {
 				if height%100 == 0 {
 					s.logger.Debug().Uint64("height", height).Msg("saving progress")
 				}
+
+				// Log timing for this cascade block
+				s.logger.Debug().Uint64("height", height).
+					Msg("cascade block processed")
 			}
 		}
 	}

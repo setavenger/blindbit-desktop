@@ -7,22 +7,19 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/setavenger/blindbit-lib/networking"
 	"github.com/setavenger/blindbit-lib/wallet"
 	"github.com/setavenger/go-bip352"
 )
 
 // MarkSpentUTXOs marks UTXOs as spent based on the spent outpoints filter
-func (s *Scanner) MarkSpentUTXOs(blockHeight uint64) error {
+func (s *Scanner) MarkSpentUTXOs(data *BlockData) error {
 	markStart := time.Now()
 
-	// Get the spent outpoints filter
 	filterStart := time.Now()
-	filter, err := s.client.GetFilter(blockHeight, networking.SpentOutpointsFilterType)
-	if err != nil {
-		s.logger.Err(err).Msg("failed to get spent outpoints filter")
-		return err
-	}
+	blockHeight := data.Height
+	filter := data.FilterSpent
+
+	// Get the spent outpoints filter
 	filterDuration := time.Since(filterStart)
 
 	// Generate local outpoint hashes for our UTXOs

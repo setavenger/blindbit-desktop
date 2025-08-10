@@ -352,6 +352,13 @@ func (s *Scanner) ScanBlock(blockHeight uint64) ([]*wallet.OwnedUTXO, error) {
 
 // precomputePotentialOutputs computes all possible output pubkeys for the given tweaks
 func (s *Scanner) precomputePotentialOutputs(tweaks [][33]byte) [][]byte {
+	precomputeStart := time.Now()
+	defer func() {
+		s.logger.Debug().Int("tweak_count", len(tweaks)).
+			Dur("precompute_duration", time.Since(precomputeStart)).
+			Msg("precomputation completed")
+	}()
+
 	var potentialOutputs [][]byte
 
 	// Use a mutex to protect the shared slice

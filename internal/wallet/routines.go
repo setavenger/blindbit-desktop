@@ -11,8 +11,11 @@ import (
 	"github.com/setavenger/blindbit-scan/pkg/scan"
 )
 
-func (s *Scanner) FinishBlock(height uint64, ownedUTXOs []*wallet.OwnedUTXO) error {
-	err := s.MarkSpentUTXOs(height)
+func (s *Scanner) FinishBlock(data *BlockData) error {
+	height := data.Height
+	ownedUTXOs := data.OwnedUTXOs
+
+	err := s.MarkSpentUTXOs(data)
 	if err != nil {
 		s.logger.Err(err).Msg("failed to mark utxos as spent")
 		return err
@@ -43,9 +46,17 @@ type BlockData struct {
 	FilterNew   *networking.Filter
 	FilterSpent *networking.Filter
 	Tweaks      [][33]byte
+	OwnedUTXOs  []*wallet.OwnedUTXO
 }
 
 func (s *Scanner) BlockFetcher(height uint64) (*BlockData, error) {
+	fetchStart := time.Now()
+	defer func() {
+		s.logger.Debug().Uint64("height", height).
+			Dur("fetch_duration", time.Since(fetchStart)).
+			Msg("data fetched")
+	}()
+
 	s.logger.Debug().Uint64("height", height).Msg("fetching data")
 	var wg sync.WaitGroup
 	wg.Add(3)
@@ -104,6 +115,13 @@ func (s *Scanner) BlockFetcher(height uint64) (*BlockData, error) {
 }
 
 func (s *Scanner) ProcessBlockData(data *BlockData) ([]*wallet.OwnedUTXO, error) {
+	processStart := time.Now()
+	defer func() {
+		s.logger.Debug().Uint64("height", data.Height).
+			Dur("block_process_duration", time.Since(processStart)).
+			Msg("block processed")
+	}()
+
 	blockHeight := data.Height
 	s.logger.Info().Uint64("height", blockHeight).Msg("processing block")
 
