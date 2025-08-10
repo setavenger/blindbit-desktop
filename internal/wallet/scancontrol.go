@@ -25,7 +25,7 @@ func (s *Scanner) Start() error {
 			s.scanMu.Lock()
 			s.scanning = false
 			s.scanMu.Unlock()
-			s.logger.Info().Msg("scanner stopped wow")
+			s.logger.Info().Msg("scanner stopped")
 
 			// Signal that we're done if there's a done channel
 			if s.doneChan != nil {
@@ -38,7 +38,7 @@ func (s *Scanner) Start() error {
 			// Check if we should stop before starting a new scan cycle
 			select {
 			case <-s.stopChan:
-				s.logger.Info().Msg("received stop signal before scan cycle")
+				s.logger.Debug().Msg("received stop signal before scan cycle")
 				return
 			default:
 			}
@@ -59,7 +59,7 @@ func (s *Scanner) Start() error {
 
 			if err != nil {
 				s.logger.Error().Err(err).Msg("error during scanning")
-				s.stopChan <- struct{}{}
+				s.Stop()
 			} else {
 				// Final UTXO update when scanning completes successfully
 				if s.progressCallback != nil {
@@ -70,7 +70,7 @@ func (s *Scanner) Start() error {
 			// Check if we should stop after scan cycle
 			select {
 			case <-s.stopChan:
-				s.logger.Info().Msg("received stop signal after scan cycle")
+				s.logger.Debug().Msg("received stop signal after scan cycle")
 				return
 			default:
 				// Wait before next scan cycle

@@ -54,7 +54,7 @@ func (s *Scanner) SyncToTipWithProgress(progressCallback func(uint64)) error {
 
 	// fetch Routine
 	go func() {
-		semaphore := make(chan struct{}, 200) // Limit concurrent goroutines
+		semaphore := make(chan struct{}, 100) // Limit concurrent goroutines
 		for i := startHeight; i <= chainTip; i++ {
 			semaphore <- struct{}{} // Acquire semaphore
 			select {

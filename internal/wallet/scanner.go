@@ -366,7 +366,7 @@ func (s *Scanner) precomputePotentialOutputs(tweaks [][33]byte) [][]byte {
 
 	// Process tweaks in parallel
 	var wg sync.WaitGroup
-	semaphore := make(chan struct{}, 13) // Limit concurrent goroutines
+	semaphore := make(chan struct{}, 24) // Limit concurrent goroutines
 
 	for _, tweak := range tweaks {
 		wg.Add(1)

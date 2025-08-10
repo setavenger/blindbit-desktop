@@ -28,7 +28,8 @@ type MainGUI struct {
 	utxoList        *widget.Table
 	utxoData        []UTXODisplay
 	updateTicker    *time.Ticker
-	cachedAddress   string // Cache the address to avoid constant regeneration
+	cachedAddress   string       // Cache the address to avoid constant regeneration
+	trayManager     *TrayManager // System tray manager
 }
 
 // UTXODisplay represents a UTXO for display in the GUI
@@ -60,13 +61,16 @@ func (g *MainGUI) UtxoCount(states ...string) int {
 }
 
 // NewMainGUI creates a new main GUI instance
-func NewMainGUI(window fyne.Window, walletManager *wallet.Manager) *MainGUI {
+func NewMainGUI(app fyne.App, window fyne.Window, walletManager *wallet.Manager) *MainGUI {
 	gui := &MainGUI{
 		window:        window,
 		walletManager: walletManager,
 		utxoData:      []UTXODisplay{},
 	}
 	gui.createContent()
+
+	// Initialize system tray manager
+	gui.trayManager = NewTrayManager(app, window)
 
 	// Start periodic updates
 	gui.startPeriodicUpdates()
@@ -82,6 +86,7 @@ func (g *MainGUI) GetContent() *fyne.Container {
 // Cleanup cleans up resources when the GUI is destroyed
 func (g *MainGUI) Cleanup() {
 	g.stopPeriodicUpdates()
+	// Note: Tray manager cleanup is handled automatically by the systray package
 }
 
 // createContent creates the main GUI content
@@ -290,5 +295,34 @@ func (g *MainGUI) startPeriodicUpdates() {
 func (g *MainGUI) stopPeriodicUpdates() {
 	if g.updateTicker != nil {
 		g.updateTicker.Stop()
+	}
+}
+
+// IsWindowVisible returns whether the main window is currently visible
+func (g *MainGUI) IsWindowVisible() bool {
+	if g.trayManager != nil {
+		return g.trayManager.IsVisible()
+	}
+	return true // Default to visible if no tray manager
+}
+
+// UpdateTrayIcon updates the system tray icon
+func (g *MainGUI) UpdateTrayIcon(iconBytes []byte) {
+	if g.trayManager != nil {
+		g.trayManager.UpdateTrayIcon(iconBytes)
+	}
+}
+
+// UpdateTrayTooltip updates the system tray tooltip
+func (g *MainGUI) UpdateTrayTooltip(tooltip string) {
+	if g.trayManager != nil {
+		g.trayManager.UpdateTrayTooltip(tooltip)
+	}
+}
+
+// UpdateTrayTitle updates the system tray title
+func (g *MainGUI) UpdateTrayTitle(title string) {
+	if g.trayManager != nil {
+		g.trayManager.UpdateTrayTitle(title)
 	}
 }
