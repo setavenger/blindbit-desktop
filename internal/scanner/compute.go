@@ -1,4 +1,4 @@
-package wallet
+package scanner
 
 import (
 	"github.com/setavenger/blindbit-lib/utils"

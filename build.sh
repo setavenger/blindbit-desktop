@@ -17,6 +17,6 @@ go mod tidy
 # Build for current platform using cmd directory
 echo "Building for current platform..."
 # go build -tags=libsecp256k1 -o blindbit-desktop ./cmd/blindbit-desktop
-go build -o blindbit-desktop ./cmd/blindbit-desktop
+go build -o ./bin/blindbit-desktop ./cmd/blindbit-desktop
 
-echo "Build complete! Run with: ./blindbit-desktop" 
+echo "Build complete! Run with: ./bin//blindbit-desktop" 

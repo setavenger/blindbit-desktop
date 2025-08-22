@@ -1,4 +1,4 @@
-package wallet
+package scanner
 
 import (
 	"fmt"
@@ -70,7 +70,7 @@ func (s *Scanner) BlockFetcher(height uint64) (*BlockData, error) {
 	go func() {
 		defer wg.Done()
 		var err error
-		filterNew, err = s.client.GetFilter(height, networking.NewUTXOFilterType)
+		filterNew, err = s.Client.GetFilter(height, networking.NewUTXOFilterType)
 		if err != nil {
 			s.logger.Err(err).Msg("failed to get new utxos filter")
 			errChan <- err
@@ -79,7 +79,7 @@ func (s *Scanner) BlockFetcher(height uint64) (*BlockData, error) {
 	go func() {
 		defer wg.Done()
 		var err error
-		filterSpent, err = s.client.GetFilter(height, networking.SpentOutpointsFilterType)
+		filterSpent, err = s.Client.GetFilter(height, networking.SpentOutpointsFilterType)
 		if err != nil {
 			s.logger.Err(err).Msg("failed to get spent outpoints filter")
 			errChan <- err
@@ -89,7 +89,7 @@ func (s *Scanner) BlockFetcher(height uint64) (*BlockData, error) {
 	go func() {
 		defer wg.Done()
 		var err error
-		tweaks, err = s.client.GetTweaks(height, 0)
+		tweaks, err = s.Client.GetTweaks(height, 0)
 		if err != nil {
 			s.logger.Err(err).Msg("failed to pull tweaks")
 			errChan <- err
@@ -175,7 +175,7 @@ func (s *Scanner) ProcessBlockData(data *BlockData) ([]*wallet.OwnedUTXO, error)
 	// Time GetUTXOs
 	utxoStart := time.Now()
 	// keep in here, only called if we think we have a match
-	utxos, err := s.client.GetUTXOs(blockHeight)
+	utxos, err := s.Client.GetUTXOs(blockHeight)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get UTXOs: %w", err)
 	}

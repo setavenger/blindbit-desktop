@@ -11,13 +11,13 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
-	"github.com/setavenger/blindbit-desktop/internal/wallet"
+	"github.com/setavenger/blindbit-desktop/internal/manager"
 )
 
 // MainGUI represents the main GUI application
 type MainGUI struct {
 	window          fyne.Window
-	walletManager   *wallet.Manager
+	walletManager   *manager.Manager
 	content         *fyne.Container
 	addressLabel    *widget.Label
 	balanceLabel    *widget.Label
@@ -61,7 +61,9 @@ func (g *MainGUI) UtxoCount(states ...string) int {
 }
 
 // NewMainGUI creates a new main GUI instance
-func NewMainGUI(app fyne.App, window fyne.Window, walletManager *wallet.Manager) *MainGUI {
+func NewMainGUI(
+	app fyne.App, window fyne.Window, walletManager *manager.Manager,
+) *MainGUI {
 	gui := &MainGUI{
 		window:        window,
 		walletManager: walletManager,
@@ -182,7 +184,9 @@ func (g *MainGUI) updateWalletInfo() {
 	// Update chain tip and sync status
 	_, chainTip, syncPercentage := g.walletManager.GetSyncStatus()
 	if chainTip > 0 {
-		g.chainTipLabel.SetText(fmt.Sprintf("Chain Tip: %d (%.1f%% synced)", chainTip, syncPercentage))
+		g.chainTipLabel.SetText(
+			fmt.Sprintf("Chain Tip: %d (%.1f%% synced)", chainTip, syncPercentage),
+		)
 
 		// Color code the sync status
 		if syncPercentage >= 100.0 {

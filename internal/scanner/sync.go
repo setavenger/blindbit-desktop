@@ -1,4 +1,4 @@
-package wallet
+package scanner
 
 import (
 	"fmt"
@@ -22,7 +22,7 @@ func (s *Scanner) SyncToTipWithProgress(progressCallback func(uint64)) error {
 		s.logger.Info().Dur("total_sync_duration", time.Since(syncStart)).Msg("sync completed")
 	}()
 
-	chainTip, err := s.client.GetChainTip()
+	chainTip, err := s.Client.GetChainTip()
 	if err != nil {
 		return fmt.Errorf("failed to get chain tip: %w", err)
 	}
@@ -55,16 +55,8 @@ func (s *Scanner) SyncToTipWithProgress(progressCallback func(uint64)) error {
 	// fetch Routine
 	go func() {
 		semaphore := make(chan struct{}, 100) // Limit concurrent goroutines
-		for i := startHeight; i <= chainTip; i++ {
+		for i := startHeight; i <= chainTip && !stopFlag; i++ {
 			semaphore <- struct{}{} // Acquire semaphore
-			select {
-			case <-s.stopChan:
-				stopFlag = true
-				s.logger.Info().Msg("scanning stopped during block scan")
-				return
-			default:
-			}
-
 			// Check for stop signal before scanning each block
 			if stopFlag {
 				s.logger.Info().Msg("stop flag called")
@@ -118,6 +110,10 @@ func (s *Scanner) SyncToTipWithProgress(progressCallback func(uint64)) error {
 	// block finishing has to be done sequentially. Spent utxos will not be consistent... maybe?
 	for !stopFlag {
 		select {
+		case <-s.stopChan:
+			stopFlag = true
+			s.logger.Info().Msg("scanning stopped during block scan")
+			return nil
 		case err := <-errChan:
 			s.logger.Err(err).Msg("scanning failed")
 			return err

@@ -1,4 +1,4 @@
-package wallet
+package scanner
 
 import (
 	"fmt"
@@ -19,7 +19,7 @@ import (
 
 // Scanner handles the scanning process
 type Scanner struct {
-	client         networking.BlindBitConnector
+	Client         networking.BlindBitConnector
 	electrum       *electrum.Client
 	logger         *zerolog.Logger
 	wallet         *wallet.Wallet
@@ -75,7 +75,7 @@ func NewScanner(
 
 	// Use the logger directly (it already has caller information)
 	scanner := &Scanner{
-		client:         blindBitClient,
+		Client:         blindBitClient,
 		electrum:       electrumClient,
 		logger:         logger,
 		wallet:         wallet,
@@ -102,7 +102,7 @@ func NewScannerFull(
 ) (*Scanner, error) {
 	// Use the logger directly (it already has caller information)
 	scanner := &Scanner{
-		client:         bbClient,
+		Client:         bbClient,
 		electrum:       electrumClient,
 		logger:         logger,
 		wallet:         wallet,
@@ -180,7 +180,7 @@ func (s *Scanner) ScanBlock(blockHeight uint64) ([]*wallet.OwnedUTXO, error) {
 
 	// Time GetTweaks
 	tweakStart := time.Now()
-	tweaks, err := s.client.GetTweaks(blockHeight, 1000) // Default dust limit
+	tweaks, err := s.Client.GetTweaks(blockHeight, 1000) // Default dust limit
 	if err != nil {
 		return nil, fmt.Errorf("failed to get tweaks: %w", err)
 	}
@@ -209,7 +209,7 @@ func (s *Scanner) ScanBlock(blockHeight uint64) ([]*wallet.OwnedUTXO, error) {
 	if len(potentialOutputs) > 0 {
 		// if len(potentialOutputs) > 0 {
 		filterCheckStart := time.Now()
-		filterData, err := s.client.GetFilter(blockHeight, networking.NewUTXOFilterType)
+		filterData, err := s.Client.GetFilter(blockHeight, networking.NewUTXOFilterType)
 		if err != nil {
 			s.logger.Err(err).Msg("failed to get UTXO filter")
 			// Continue without filter optimization
@@ -242,7 +242,7 @@ func (s *Scanner) ScanBlock(blockHeight uint64) ([]*wallet.OwnedUTXO, error) {
 
 	// Time GetUTXOs
 	utxoStart := time.Now()
-	utxos, err := s.client.GetUTXOs(blockHeight)
+	utxos, err := s.Client.GetUTXOs(blockHeight)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get UTXOs: %w", err)
 	}

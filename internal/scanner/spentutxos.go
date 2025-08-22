@@ -1,4 +1,4 @@
-package wallet
+package scanner
 
 import (
 	"bytes"
@@ -59,7 +59,7 @@ func (s *Scanner) MarkSpentUTXOs(data *BlockData) error {
 
 	// Get the spent outpoints index
 	indexStart := time.Now()
-	index, err := s.client.GetSpentOutpointsIndex(blockHeight)
+	index, err := s.Client.GetSpentOutpointsIndex(blockHeight)
 	if err != nil {
 		s.logger.Err(err).Msg("failed to get spent outpoints index")
 		return err

@@ -8,7 +8,7 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/setavenger/blindbit-desktop/internal/gui"
-	"github.com/setavenger/blindbit-desktop/internal/wallet"
+	"github.com/setavenger/blindbit-desktop/internal/manager"
 )
 
 func main() {
@@ -24,7 +24,7 @@ func main() {
 	mainWindow.CenterOnScreen()
 
 	// Initialize wallet manager
-	walletManager, err := wallet.NewManager()
+	walletManager, err := manager.NewManager()
 	if err != nil {
 		log.Printf("Failed to initialize wallet manager: %v", err)
 		// Show error dialog
