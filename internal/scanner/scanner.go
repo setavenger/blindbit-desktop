@@ -195,9 +195,14 @@ func (s *Scanner) ScanBlock(blockHeight uint64) ([]*wallet.OwnedUTXO, error) {
 		return nil, nil
 	}
 
+	convTweaks := make([][33]byte, len(tweaks))
+	for i := range tweaks {
+		convTweaks[i] = [33]byte(tweaks[i])
+	}
+
 	// OPTIMIZATION: Precompute potential outputs and check against filter first
 	filterStart := time.Now()
-	potentialOutputs := s.precomputePotentialOutputs(tweaks)
+	potentialOutputs := s.precomputePotentialOutputs(convTweaks)
 	filterDuration := time.Since(filterStart)
 	s.logger.Debug().
 		Uint64("height", blockHeight).
@@ -272,9 +277,14 @@ func (s *Scanner) ScanBlock(blockHeight uint64) ([]*wallet.OwnedUTXO, error) {
 		}
 	}
 
+	// convTweaks := make([][33]byte, len(tweaks))
+	// for i := range tweaks {
+	// 	convTweaks[i] = [33]byte(tweaks[i])
+	// }
+
 	// todo: we are doing comptations several times over.
 	// If we have a match we are doing the same step as in precomputtion
-	ownedUTXOsScan, err := scan.ScanDataOptimized(s, utxosTransform, tweaks)
+	ownedUTXOsScan, err := scan.ScanDataOptimized(s, utxosTransform, convTweaks)
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan data: %w", err)
 	}

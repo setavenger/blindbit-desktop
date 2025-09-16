@@ -65,7 +65,7 @@ func (s *Scanner) BlockFetcher(height uint64) (*BlockData, error) {
 	errChan := make(chan error, 4)
 
 	var filterNew, filterSpent *networking.Filter
-	var tweaks [][33]byte
+	var tweaks [][]byte
 
 	go func() {
 		defer wg.Done()
@@ -105,11 +105,16 @@ func (s *Scanner) BlockFetcher(height uint64) (*BlockData, error) {
 		// do nothing
 	}
 
+	convTweaks := make([][33]byte, len(tweaks))
+	for i := range tweaks {
+		convTweaks[i] = [33]byte(tweaks[i])
+	}
+
 	var out BlockData
 	out.Height = height
 	out.FilterNew = filterNew
 	out.FilterSpent = filterSpent
-	out.Tweaks = tweaks
+	out.Tweaks = convTweaks
 
 	return &out, nil
 }
