@@ -7,19 +7,12 @@ require (
 	github.com/btcsuite/btcd/btcutil v1.1.6
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0
 	github.com/rs/zerolog v1.34.0
-	github.com/setavenger/blindbit-lib v0.0.0-20250807130019-f9642edb8c97
-	github.com/setavenger/blindbit-scan v0.1.2-0.20250808123901-ddda87f37adf
-	github.com/setavenger/go-bip352 v0.1.8-0.20250807131225-a74b7fe83681
+	github.com/setavenger/blindbit-lib v0.0.2-0.20250918153820-dc047d853b25
+	github.com/setavenger/blindbit-scan v0.1.2-0.20250918153639-e217b21becad
+	github.com/setavenger/go-bip352 v0.1.9-0.20250820221930-c8017d2d519c
 	github.com/setavenger/go-electrum v1.1.1
 	github.com/spf13/viper v1.19.0
 	github.com/tyler-smith/go-bip39 v1.1.0
-)
-
-// todo: remove when back online
-replace (
-	github.com/setavenger/blindbit-lib => ../blindbit-lib/
-	github.com/setavenger/blindbit-scan => ../blindbit-scan/
-	github.com/setavenger/go-bip352 => ../go-bip352/
 )
 
 require (
@@ -64,7 +57,7 @@ require (
 	github.com/puzpuzpuz/xsync/v3 v3.5.1 // indirect
 	github.com/sagikazarmark/locafero v0.4.0 // indirect
 	github.com/sagikazarmark/slog-shim v0.1.0 // indirect
-	github.com/setavenger/go-libsecp256k1 v0.0.0 // indirect
+	github.com/setavenger/go-libsecp256k1 v0.0.1-0.20250915182350-c8aa8e7d10b3 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/afero v1.11.0 // indirect
