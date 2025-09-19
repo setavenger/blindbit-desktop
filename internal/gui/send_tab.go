@@ -9,6 +9,7 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"github.com/setavenger/blindbit-lib/logging"
 )
 
 // createSendTab creates the send tab
@@ -53,6 +54,7 @@ func (g *MainGUI) sendTransaction(address, amountStr, feeRateStr string) {
 
 	txHex, err := g.walletManager.SendTransaction(address, amount, feeRate)
 	if err != nil {
+		logging.L.Err(err).Str("tx_hex", txHex).Msg("failed to send transaction")
 		dialog.ShowError(fmt.Errorf("failed to send transaction: %v", err), g.window)
 		return
 	}

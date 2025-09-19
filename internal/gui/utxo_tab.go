@@ -92,8 +92,6 @@ func (g *MainGUI) createUTXOOverviewTab() *fyne.Container {
 		widget.NewSeparator(),
 	)
 
-	fmt.Println("Utxolist MinSize:", utxoList.MinSize())
-
 	// UTXO list section with proper layout - no need for separate headers now
 	listSection := container.NewStack(
 		widget.NewLabel("UTXO Details"),

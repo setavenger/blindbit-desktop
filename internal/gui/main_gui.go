@@ -3,6 +3,8 @@ package gui
 import (
 	"encoding/hex"
 	"fmt"
+	"os"
+	"os/exec"
 	"slices"
 	"sort"
 	"time"
@@ -329,4 +331,30 @@ func (g *MainGUI) UpdateTrayTitle(title string) {
 	if g.trayManager != nil {
 		g.trayManager.UpdateTrayTitle(title)
 	}
+}
+
+// restartApplication attempts to re-execute the current binary with the same arguments, then exits the current process.
+func (g *MainGUI) restartApplication() error {
+	exePath, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	// Preserve original args (excluding the current process name; os.Args[0] is the path)
+	args := os.Args[1:]
+
+	cmd := exec.Command(exePath, args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+
+	// Start the new process and exit the current one
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	// Close the current app window and exit
+	if g.window != nil {
+		g.window.Close()
+	}
+	os.Exit(0)
+	return nil
 }

@@ -44,9 +44,8 @@ This directory contains the GUI components for the BlindBit Desktop application,
 - **`settings_tab.go`** - Configuration tab
   - `createSettingsTab()` - Settings form
   - Network selection (testnet, mainnet, signet, regtest)
-  - Oracle and Electrum server configuration
+  - Oracle configuration
   - Wallet settings (dust limit, label count, birth height)
-  - Tor configuration
 
 ### Dialog Components
 

@@ -10,20 +10,18 @@ import (
 // Add this helper method to Manager:
 func (m *Manager) setupScanner() error {
 	oracleURL := m.config.GetString("oracle_url")
-	electrumURL := m.config.GetString("electrum_url")
 	birthHeight := m.config.GetUint64("birth_height")
 	labelCount := m.config.GetInt("label_count") // Get label count from config
 
 	m.logger.Info().
 		Str("oracle_url", oracleURL).
-		Str("electrum_url", electrumURL).
 		Uint64("birth_height", birthHeight).
 		Int("label_count", labelCount).
 		Uint64("saved_scan_height", m.scanHeight).
 		Msg("setting up scanner")
 
 	scanManger, err := scanner.NewScanner(
-		oracleURL, electrumURL, m.wallet, &m.logger, labelCount,
+		oracleURL, m.wallet, &m.logger, labelCount,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create scanner: %w", err)

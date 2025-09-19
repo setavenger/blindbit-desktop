@@ -9,9 +9,14 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/setavenger/blindbit-desktop/internal/gui"
 	"github.com/setavenger/blindbit-desktop/internal/manager"
+	"github.com/spf13/pflag"
 )
 
 func main() {
+	var dataDir string
+	pflag.StringVar(&dataDir, "datadir", "", "path to data directory for BlindBit Desktop")
+	pflag.Parse()
+
 	// Create a new Fyne application
 	myApp := app.New()
 
@@ -24,7 +29,7 @@ func main() {
 	mainWindow.CenterOnScreen()
 
 	// Initialize wallet manager
-	walletManager, err := manager.NewManager()
+	walletManager, err := manager.NewManagerWithDataDir(dataDir)
 	if err != nil {
 		log.Printf("Failed to initialize wallet manager: %v", err)
 		// Show error dialog

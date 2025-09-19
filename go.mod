@@ -10,7 +10,7 @@ require (
 	github.com/setavenger/blindbit-lib v0.0.2-0.20250918153820-dc047d853b25
 	github.com/setavenger/blindbit-scan v0.1.2-0.20250918153639-e217b21becad
 	github.com/setavenger/go-bip352 v0.1.9-0.20250820221930-c8017d2d519c
-	github.com/setavenger/go-electrum v1.1.1
+	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.19.0
 	github.com/tyler-smith/go-bip39 v1.1.0
 )
@@ -57,12 +57,12 @@ require (
 	github.com/puzpuzpuz/xsync/v3 v3.5.1 // indirect
 	github.com/sagikazarmark/locafero v0.4.0 // indirect
 	github.com/sagikazarmark/slog-shim v0.1.0 // indirect
+	github.com/setavenger/go-electrum v1.1.1 // indirect
 	github.com/setavenger/go-libsecp256k1 v0.0.1-0.20250915182350-c8aa8e7d10b3 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/afero v1.11.0 // indirect
 	github.com/spf13/cast v1.6.0 // indirect
-	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/srwiley/oksvg v0.0.0-20221011165216-be6e8873101c // indirect
 	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef // indirect
 	github.com/stretchr/testify v1.10.0 // indirect

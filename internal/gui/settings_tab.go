@@ -37,17 +37,6 @@ func (g *MainGUI) createSettingsTab() *fyne.Container {
 	oracleURL.SetText(g.walletManager.GetOracleURL())
 	oracleURL.SetPlaceHolder("Oracle server URL")
 
-	electrumURL := widget.NewEntry()
-	electrumURL.SetText(g.walletManager.GetElectrumURL())
-	electrumURL.SetPlaceHolder("Electrum server URL")
-
-	useTor := widget.NewCheck("Use Tor", func(checked bool) {
-		if err := g.walletManager.SetUseTor(checked); err != nil {
-			dialog.ShowError(fmt.Errorf("failed to set Tor setting: %v", err), g.window)
-		}
-	})
-	useTor.SetChecked(g.walletManager.GetUseTor())
-
 	// Wallet settings
 	dustLimit := widget.NewEntry()
 	dustLimit.SetText(fmt.Sprintf("%d", g.walletManager.GetDustLimit()))
@@ -66,12 +55,6 @@ func (g *MainGUI) createSettingsTab() *fyne.Container {
 		// Save oracle URL
 		if err := g.walletManager.SetOracleURL(oracleURL.Text); err != nil {
 			dialog.ShowError(fmt.Errorf("failed to save oracle URL: %v", err), g.window)
-			return
-		}
-
-		// Save electrum URL
-		if err := g.walletManager.SetElectrumURL(electrumURL.Text); err != nil {
-			dialog.ShowError(fmt.Errorf("failed to save electrum URL: %v", err), g.window)
 			return
 		}
 
@@ -102,7 +85,23 @@ func (g *MainGUI) createSettingsTab() *fyne.Container {
 		// Update the Oracle URL display in the main view
 		g.updateOracleURLDisplay()
 
-		dialog.ShowInformation("Settings", "Settings saved successfully", g.window)
+		// Ask user to restart the application to apply changes fully
+		dialog.ShowCustomConfirm(
+			"Restart Required",
+			"Restart Now",
+			"Later",
+			widget.NewLabel("Some settings may require a restart to take full effect. Restart now?"),
+			func(confirmed bool) {
+				if confirmed {
+					if err := g.restartApplication(); err != nil {
+						dialog.ShowError(fmt.Errorf("failed to restart application: %v", err), g.window)
+					}
+				} else {
+					dialog.ShowInformation("Settings", "Settings saved. Restart later to apply all changes.", g.window)
+				}
+			},
+			g.window,
+		)
 	})
 
 	// Create form sections
@@ -117,8 +116,6 @@ func (g *MainGUI) createSettingsTab() *fyne.Container {
 		widget.NewLabel("Oracle Settings"),
 		widget.NewForm(
 			widget.NewFormItem("Oracle URL", oracleURL),
-			widget.NewFormItem("Electrum URL", electrumURL),
-			widget.NewFormItem("Use Tor", useTor),
 		),
 	)
 

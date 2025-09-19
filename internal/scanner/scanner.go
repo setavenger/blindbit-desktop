@@ -14,13 +14,12 @@ import (
 	netscan "github.com/setavenger/blindbit-scan/pkg/networking"
 	"github.com/setavenger/blindbit-scan/pkg/scan"
 	"github.com/setavenger/go-bip352"
-	"github.com/setavenger/go-electrum/electrum"
 )
 
 // Scanner handles the scanning process
 type Scanner struct {
-	Client         networking.BlindBitConnector
-	electrum       *electrum.Client
+	Client networking.BlindBitConnector
+
 	logger         *zerolog.Logger
 	wallet         *wallet.Wallet
 	scanSecret     [32]byte
@@ -56,7 +55,6 @@ func (s *Scanner) Labels() []*bip352.Label {
 // NewScanner creates a new scanner
 func NewScanner(
 	oracleURL string,
-	electrumURL string,
 	wallet *wallet.Wallet,
 	logger *zerolog.Logger,
 	labelCount int, // Add label count parameter
@@ -64,8 +62,7 @@ func NewScanner(
 	// Create BlindBit client
 	blindBitClient := &networking.ClientBlindBit{BaseURL: oracleURL}
 
-	// Create Electrum client - disabled for now
-	var electrumClient *electrum.Client = nil
+	// Electrum client removed
 
 	// Generate labels properly with the specified count
 	labels, err := generateLabels(wallet, labelCount)
@@ -76,7 +73,6 @@ func NewScanner(
 	// Use the logger directly (it already has caller information)
 	scanner := &Scanner{
 		Client:         blindBitClient,
-		electrum:       electrumClient,
 		logger:         logger,
 		wallet:         wallet,
 		scanSecret:     wallet.SecretKeyScan,
@@ -92,7 +88,6 @@ func NewScanner(
 
 func NewScannerFull(
 	bbClient networking.BlindBitConnector,
-	electrumClient *electrum.Client,
 	wallet *wallet.Wallet,
 	logger *zerolog.Logger,
 	labels []*bip352.Label,
@@ -103,7 +98,6 @@ func NewScannerFull(
 	// Use the logger directly (it already has caller information)
 	scanner := &Scanner{
 		Client:         bbClient,
-		electrum:       electrumClient,
 		logger:         logger,
 		wallet:         wallet,
 		scanSecret:     wallet.SecretKeyScan,

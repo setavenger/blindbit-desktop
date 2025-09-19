@@ -11,13 +11,14 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/setavenger/blindbit-desktop/internal/scanner"
 	"github.com/setavenger/blindbit-lib/logging"
+	"github.com/setavenger/blindbit-lib/utils"
 	"github.com/setavenger/blindbit-lib/wallet"
 	"github.com/spf13/viper"
 	"github.com/tyler-smith/go-bip39"
 	// Import blindbit-scan structures
 )
 
-// Label represents a labeled address for the GUI (simplified version for display)
+// LabelGUI represents a labeled address for the GUI (simplified version for display)
 type LabelGUI struct {
 	PubKey  string `json:"pub_key"`
 	Tweak   string `json:"tweak"`
@@ -27,50 +28,53 @@ type LabelGUI struct {
 
 // Manager handles wallet operations and scanning
 type Manager struct {
-	config     *viper.Viper
-	dataDir    string
-	mu         sync.RWMutex
-	scanHeight uint64
-	wallet     *wallet.Wallet
-	utxos      []*wallet.OwnedUTXO
-	logger     zerolog.Logger // Add logger field
+	config          *viper.Viper
+	dataDir         string
+	mu              sync.RWMutex
+	scanHeight      uint64
+	wallet          *wallet.Wallet
+	utxos           []*wallet.OwnedUTXO
+	logger          zerolog.Logger // Add logger field
+	minChangeAmount uint64
 
 	scanner *scanner.Scanner // Add scanner field
 }
 
-// NewManager creates a new wallet manager
+// NewManager creates a new wallet manager using the default data directory
 func NewManager() (*Manager, error) {
-	fmt.Println("Creating new wallet manager...")
-	dataDir := getDataDir()
+	return NewManagerWithDataDir("")
+}
+
+// NewManagerWithDataDir creates a new wallet manager using the provided data directory.
+// If dataDir is empty, it falls back to the default returned by getDataDir().
+func NewManagerWithDataDir(dataDir string) (*Manager, error) {
+	if dataDir == "" {
+		dataDir = getDataDir()
+	} else {
+		dataDir = utils.ResolvePath(dataDir)
+	}
 
 	// Ensure data directory exists
-	fmt.Println("Creating data directory...")
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		fmt.Printf("Error creating data directory: %v\n", err)
 		return nil, fmt.Errorf("failed to create data directory: %w", err)
 	}
-	fmt.Println("Data directory created/verified")
 
 	// Initialize configuration
-	fmt.Println("Initializing configuration...")
 	config := viper.New()
 	config.SetConfigName("blindbit")
 	config.SetConfigType("toml")
 	config.AddConfigPath(dataDir)
 
 	// Set default values
-	fmt.Println("Setting default config values...")
 	setDefaultConfig(config)
 
 	// Load existing config if it exists
-	fmt.Println("Loading existing config...")
 	if err := config.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
-			fmt.Printf("Error reading config: %v\n", err)
 			return nil, fmt.Errorf("failed to read config: %w", err)
 		}
 		// Config file doesn't exist, create default one
-		fmt.Println("Creating default config file...")
 		if err := config.WriteConfigAs(filepath.Join(dataDir, "blindbit.toml")); err != nil {
 			fmt.Printf("Error writing default config: %v\n", err)
 			return nil, fmt.Errorf("failed to write default config: %w", err)
@@ -88,13 +92,13 @@ func NewManager() (*Manager, error) {
 		// logger:  zerolog.New(os.Stdout).With().Caller().Timestamp().Logger(),
 		logger: logging.L,
 	}
-	fmt.Println("Manager instance created successfully")
+	// initialize runtime fields from config
+	manager.minChangeAmount = config.GetUint64("min_change_amount")
 	return manager, nil
 }
 
 // getDataDir returns the appropriate data directory for the application
 func getDataDir() string {
-	fmt.Println("Getting data directory...")
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		fmt.Printf("Error getting home directory: %v\n", err)
@@ -108,16 +112,15 @@ func getDataDir() string {
 // setDefaultConfig sets default configuration values
 func setDefaultConfig(config *viper.Viper) {
 	config.SetDefault("network", "testnet")
-	config.SetDefault("oracle_url", "https://oracle.testnet.blindbit.com")
-	config.SetDefault("electrum_url", "ssl://electrum.blockstream.info:60002")
-	config.SetDefault("use_tor", false)
-	config.SetDefault("tor_host", "localhost")
-	config.SetDefault("tor_port", 9050)
-	config.SetDefault("http_port", 8080)
-	config.SetDefault("private_mode", false)
-	config.SetDefault("dust_limit", 1000)
-	config.SetDefault("label_count", 21)
-	config.SetDefault("birth_height", 840000)
+	config.SetDefault("oracle_url", "https://silentpayments.dev/blindbit/mainnet")
+	// config.SetDefault("http_port", 8080)
+	// todo: this is probably not relevant anymore
+	// config.SetDefault("private_mode", false)
+	config.SetDefault("dust_limit", 546)
+	config.SetDefault("label_count", 0)
+	// todo: change to chain-tip minus a couple blocks
+	config.SetDefault("birth_height", 900000)
+	config.SetDefault("min_change_amount", 546)
 }
 
 // GenerateNewSeed generates a new BIP39 seed phrase
@@ -137,7 +140,6 @@ func (m *Manager) GenerateNewSeed() (string, error) {
 
 // GetAddress returns the current wallet address
 func (m *Manager) GetAddress() (addr string, err error) {
-	fmt.Println("Starting GetAddress...")
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -233,8 +235,14 @@ func (m *Manager) SendTransaction(
 	}
 
 	txBytes, err := m.wallet.SendToRecipients(
-		recipients, m.utxos, feeRate, 1000, true, false,
+		recipients, m.utxos, feeRate, m.minChangeAmount, true, false,
 	)
+	if err != nil {
+		logging.L.Err(err).
+			Any("utxos", m.utxos).
+			Msg("failed to build transaction")
+		return "", err
+	}
 
 	// For now, return a mock transaction ID
 	// TODO: Integrate with actual blindbit-wallet-cli sending functionality
@@ -267,12 +275,9 @@ func (m *Manager) saveWalletConfig() error {
 
 // HasWallet returns whether a wallet exists
 func (m *Manager) HasWallet() bool {
-	fmt.Println("Checking if wallet exists...")
 	walletPath := filepath.Join(m.dataDir, "wallet.json")
-	fmt.Printf("Wallet path: %s\n", walletPath)
 	_, err := os.Stat(walletPath)
 	exists := err == nil
-	fmt.Printf("Wallet exists: %v\n", exists)
 	return exists
 }
 

@@ -43,6 +43,12 @@ go build -o blindbit-desktop ./cmd/blindbit-desktop
 ./blindbit-desktop
 ```
 
+To use a custom data directory:
+
+```bash
+./blindbit-desktop --datadir /path/to/datadir-2
+```
+
 ### Using Go Install
 
 ```bash
@@ -92,11 +98,10 @@ The application has four main tabs:
 
 ## Configuration
 
-The application stores configuration in `~/.blindbit-desktop/blindbit.toml`. Default settings include:
+The application stores configuration in `~/.blindbit-desktop/blindbit.toml` by default, or in `<datadir>/blindbit.toml` when `--datadir` is provided. Default settings include:
 
 - Network: testnet
-- Oracle URL: https://oracle.testnet.blindbit.com
-- Electrum URL: ssl://electrum.blockstream.info:60002
+- Oracle URL: https://silentpayments.dev/blindbit/mainnet
 - HTTP Port: 8080
 
 ## Security Features
@@ -124,7 +129,7 @@ This desktop application integrates with:
 
 ### Data Storage
 
-Wallet data is stored in JSON format at `~/.blindbit-desktop/wallet.json`:
+Wallet data is stored in JSON format at `~/.blindbit-desktop/wallet.json` (or `<datadir>/wallet.json` when using `--datadir`):
 - Wallet configuration
 - UTXO list
 - Last scan height

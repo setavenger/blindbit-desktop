@@ -52,32 +52,21 @@ func (m *Manager) GetOracleURL() string {
 	return m.config.GetString("oracle_url")
 }
 
-// SetElectrumURL sets the electrum server URL
-func (m *Manager) SetElectrumURL(url string) error {
+// getter/setter for change amount
+// cleanup minChange amount and in the send section
+// SetMinChangeAmount sets the minimum change output amount (in sats)
+func (m *Manager) SetMinChangeAmount(amount uint64) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.config.Set("electrum_url", url)
+	m.minChangeAmount = amount
+	m.config.Set("min_change_amount", amount)
 	return m.config.WriteConfig()
 }
 
-// GetElectrumURL returns the current electrum server URL
-func (m *Manager) GetElectrumURL() string {
-	return m.config.GetString("electrum_url")
-}
-
-// SetUseTor sets whether to use Tor
-func (m *Manager) SetUseTor(useTor bool) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	m.config.Set("use_tor", useTor)
-	return m.config.WriteConfig()
-}
-
-// GetUseTor returns whether Tor is enabled
-func (m *Manager) GetUseTor() bool {
-	return m.config.GetBool("use_tor")
+// GetMinChangeAmount returns the minimum change output amount (in sats)
+func (m *Manager) GetMinChangeAmount() uint64 {
+	return m.config.GetUint64("min_change_amount")
 }
 
 // SetDustLimit sets the dust limit
