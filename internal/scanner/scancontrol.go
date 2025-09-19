@@ -17,6 +17,7 @@ func (s *Scanner) Start() error {
 
 	s.scanning = true
 	s.stopChan = make(chan struct{}) // Reset stop channel
+	s.doneChan = nil                 // Clear any existing done channel
 
 	s.logger.Info().Msg("starting scanner")
 
@@ -29,8 +30,11 @@ func (s *Scanner) Start() error {
 
 			// Signal that we're done if there's a done channel
 			if s.doneChan != nil {
+				s.logger.Debug().Msg("signaling done channel")
 				close(s.doneChan)
 				s.doneChan = nil
+			} else {
+				s.logger.Debug().Msg("no done channel to signal")
 			}
 		}()
 
@@ -57,9 +61,18 @@ func (s *Scanner) Start() error {
 				}
 			})
 
+			// Check for stop signal immediately after sync completes
+			select {
+			case <-s.stopChan:
+				s.logger.Debug().Msg("received stop signal after sync")
+				return
+			default:
+			}
+
 			if err != nil {
 				s.logger.Error().Err(err).Msg("error during scanning")
-				s.Stop()
+				// Don't call s.Stop() here as it can cause issues
+				// The goroutine will exit naturally and the defer will handle cleanup
 			} else {
 				// Final UTXO update when scanning completes successfully
 				if s.progressCallback != nil {
@@ -73,9 +86,15 @@ func (s *Scanner) Start() error {
 				s.logger.Debug().Msg("received stop signal after scan cycle")
 				return
 			default:
-				// Wait before next scan cycle
+				// Wait before next scan cycle with interruptible sleep
 				s.logger.Debug().Msg("waiting before next scan cycle")
-				time.Sleep(30 * time.Second)
+				select {
+				case <-s.stopChan:
+					s.logger.Debug().Msg("received stop signal during wait")
+					return
+				case <-time.After(30 * time.Second):
+					// Continue to next iteration
+				}
 			}
 		}
 	}()
@@ -95,19 +114,30 @@ func (s *Scanner) StopSync() {
 
 	s.logger.Info().Msg("stopping scanner synchronously")
 
-	// Create a done channel to signal when the goroutine has stopped
-	doneChan := make(chan struct{})
-	s.doneChan = doneChan // Store reference to done channel
+	// Only create a done channel if we don't already have one
+	var doneChan chan struct{}
+	if s.doneChan == nil {
+		doneChan = make(chan struct{})
+		s.doneChan = doneChan
+		s.logger.Debug().Msg("created new done channel")
+	} else {
+		// If there's already a done channel, we'll wait on it
+		doneChan = s.doneChan
+		s.logger.Debug().Msg("reusing existing done channel")
+	}
 
 	// Close the stop channel to signal the scanning goroutine to stop
-	select {
-	case <-s.stopChan:
-		// Channel already closed, do nothing
-		s.logger.Debug().Msg("stop channel already closed")
-	default:
-		// Channel not closed, close it
-		close(s.stopChan)
-		s.logger.Debug().Msg("stop channel closed")
+	// Use a safer approach to avoid closing an already closed channel
+	if s.stopChan != nil {
+		select {
+		case <-s.stopChan:
+			// Channel already closed, do nothing
+			s.logger.Debug().Msg("stop channel already closed")
+		default:
+			// Channel not closed, close it
+			close(s.stopChan)
+			s.logger.Debug().Msg("stop channel closed")
+		}
 	}
 
 	s.scanMu.Unlock()
@@ -122,6 +152,7 @@ func (s *Scanner) StopSync() {
 		// Force the scanning state to false
 		s.scanMu.Lock()
 		s.scanning = false
+		s.doneChan = nil // Clear the done channel reference
 		s.scanMu.Unlock()
 	}
 }
@@ -139,14 +170,17 @@ func (s *Scanner) Stop() {
 	s.logger.Info().Msg("stopping scanner")
 
 	// Close the stop channel to signal the scanning goroutine to stop
-	select {
-	case <-s.stopChan:
-		// Channel already closed, do nothing
-		s.logger.Debug().Msg("stop channel already closed")
-	default:
-		// Channel not closed, close it
-		close(s.stopChan)
-		s.logger.Debug().Msg("stop channel closed")
+	// Use a safer approach to avoid closing an already closed channel
+	if s.stopChan != nil {
+		select {
+		case <-s.stopChan:
+			// Channel already closed, do nothing
+			s.logger.Debug().Msg("stop channel already closed")
+		default:
+			// Channel not closed, close it
+			close(s.stopChan)
+			s.logger.Debug().Msg("stop channel closed")
+		}
 	}
 
 	// Don't set scanning to false here - let the goroutine do it

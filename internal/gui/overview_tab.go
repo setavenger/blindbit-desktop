@@ -172,8 +172,15 @@ func (g *MainGUI) rescanFromCurrentHeight(clearUTXOs bool) {
 		dialog.ShowInformation("Rescan", "Rescan started from current height", g.window)
 	}
 
-	// Update UI
-	g.updateWalletInfo()
+	// Update scan height immediately to show the reset (fast, no network calls)
+	g.updateScanHeightOnly()
+
+	// Automatically start scanning after rescan
+	if err := g.walletManager.StartScanning(); err != nil {
+		dialog.ShowError(fmt.Errorf("failed to start scanning after rescan: %v", err), g.window)
+		return
+	}
+	// Note: No need for second updateWalletInfo() call - the periodic updater will handle it
 }
 
 // rescanFromBirthHeight rescans from the birth height
@@ -193,8 +200,15 @@ func (g *MainGUI) rescanFromBirthHeight(clearUTXOs bool) {
 		dialog.ShowInformation("Rescan", "Rescan started from birth height", g.window)
 	}
 
-	// Update UI
-	g.updateWalletInfo()
+	// Update scan height immediately to show the reset (fast, no network calls)
+	g.updateScanHeightOnly()
+
+	// Automatically start scanning after rescan
+	if err := g.walletManager.StartScanning(); err != nil {
+		dialog.ShowError(fmt.Errorf("failed to start scanning after rescan: %v", err), g.window)
+		return
+	}
+	// Note: No need for second updateWalletInfo() call - the periodic updater will handle it
 }
 
 // rescanFromHeight rescans from a specific height
@@ -213,8 +227,15 @@ func (g *MainGUI) rescanFromHeight(height uint64, clearUTXOs bool) {
 		dialog.ShowInformation("Rescan", fmt.Sprintf("Rescan started from height %d", height), g.window)
 	}
 
-	// Update UI
-	g.updateWalletInfo()
+	// Update scan height immediately to show the reset (fast, no network calls)
+	g.updateScanHeightOnly()
+
+	// Automatically start scanning after rescan
+	if err := g.walletManager.StartScanning(); err != nil {
+		dialog.ShowError(fmt.Errorf("failed to start scanning after rescan: %v", err), g.window)
+		return
+	}
+	// Note: No need for second updateWalletInfo() call - the periodic updater will handle it
 }
 
 // startScanning starts the scanning process

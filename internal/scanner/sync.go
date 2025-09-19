@@ -55,22 +55,39 @@ func (s *Scanner) SyncToTipWithProgress(progressCallback func(uint64)) error {
 	// fetch Routine
 	go func() {
 		semaphore := make(chan struct{}, 100) // Limit concurrent goroutines
-		for i := startHeight; i <= chainTip && !stopFlag; i++ {
-			semaphore <- struct{}{} // Acquire semaphore
+		for i := startHeight; i <= chainTip; i++ {
 			// Check for stop signal before scanning each block
-			if stopFlag {
-				s.logger.Info().Msg("stop flag called")
+			select {
+			case <-s.stopChan:
+				s.logger.Info().Msg("fetch routine stopped")
 				return
+			default:
 			}
+
+			semaphore <- struct{}{} // Acquire semaphore
 			go func(height uint64) {
 				defer func() { <-semaphore }() // Release semaphore
+
+				// Check stop signal before fetching
+				select {
+				case <-s.stopChan:
+					return
+				default:
+				}
+
 				data, err := s.BlockFetcher(height)
 				if err != nil {
 					s.logger.Err(err).Uint64("height", height).Msg("failed fetching data")
 					errChan <- err
 					return
 				}
-				dataChan <- data
+
+				// Check stop signal before sending data
+				select {
+				case <-s.stopChan:
+					return
+				case dataChan <- data:
+				}
 			}(i)
 		}
 	}()
@@ -78,10 +95,12 @@ func (s *Scanner) SyncToTipWithProgress(progressCallback func(uint64)) error {
 	// processing in parallel as well finishing is done sequentially
 	go func() {
 		// semaphore := make(chan struct{}, 48) // Limit concurrent goroutines
-		for !stopFlag {
-			// semaphore <- struct{}{} // Acquire semaphore
-			// s.logger.Debug().Msg("waiting for fetched blocks")
+		for {
+			// Check for stop signal before processing
 			select {
+			case <-s.stopChan:
+				s.logger.Info().Msg("processing routine stopped")
+				return
 			case blockData := <-dataChan:
 				processTiming := time.Now()
 				func() {

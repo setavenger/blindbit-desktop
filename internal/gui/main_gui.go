@@ -179,11 +179,11 @@ func (g *MainGUI) updateWalletInfo() {
 		g.scanStatusLabel.TextStyle = fyne.TextStyle{}
 	}
 
-	// Update scan height
+	// Update scan height immediately (this is fast)
 	scanHeight := g.walletManager.GetScanHeight()
 	g.scanHeightLabel.SetText(fmt.Sprintf("Scan Height: %d", scanHeight))
 
-	// Update chain tip and sync status
+	// Update chain tip and sync status (this might be slow due to network call)
 	_, chainTip, syncPercentage := g.walletManager.GetSyncStatus()
 	if chainTip > 0 {
 		g.chainTipLabel.SetText(
@@ -214,6 +214,13 @@ func (g *MainGUI) updateWalletInfo() {
 	g.scanHeightLabel.Refresh()
 	g.chainTipLabel.Refresh()
 	g.oracleInfoLabel.Refresh()
+}
+
+// updateScanHeightOnly quickly updates just the scan height without network calls
+func (g *MainGUI) updateScanHeightOnly() {
+	scanHeight := g.walletManager.GetScanHeight()
+	g.scanHeightLabel.SetText(fmt.Sprintf("Scan Height: %d", scanHeight))
+	g.scanHeightLabel.Refresh()
 }
 
 // updateOracleURLDisplay updates the Oracle URL display in the main view

@@ -10,6 +10,7 @@ require (
 	github.com/setavenger/blindbit-lib v0.0.2-0.20250918153820-dc047d853b25
 	github.com/setavenger/blindbit-scan v0.1.2-0.20250918153639-e217b21becad
 	github.com/setavenger/go-bip352 v0.1.9-0.20250820221930-c8017d2d519c
+	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.19.0
 	github.com/tyler-smith/go-bip39 v1.1.0
