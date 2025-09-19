@@ -31,6 +31,7 @@ type MainGUI struct {
 	utxoData        []UTXODisplay
 	updateTicker    *time.Ticker
 	cachedAddress   string       // Cache the address to avoid constant regeneration
+	cachedChainTip  uint64       // Cache chain tip to avoid blocking network calls
 	trayManager     *TrayManager // System tray manager
 }
 
@@ -75,6 +76,13 @@ func NewMainGUI(
 
 	// Initialize system tray manager
 	gui.trayManager = NewTrayManager(app, window)
+
+	// Initialize cached chain tip in background
+	go func() {
+		if chainTip, err := gui.walletManager.GetChainTip(); err == nil {
+			gui.cachedChainTip = chainTip
+		}
+	}()
 
 	// Start periodic updates
 	gui.startPeriodicUpdates()
@@ -183,11 +191,16 @@ func (g *MainGUI) updateWalletInfo() {
 	scanHeight := g.walletManager.GetScanHeight()
 	g.scanHeightLabel.SetText(fmt.Sprintf("Scan Height: %d", scanHeight))
 
-	// Update chain tip and sync status (this might be slow due to network call)
-	_, chainTip, syncPercentage := g.walletManager.GetSyncStatus()
-	if chainTip > 0 {
+	// Update chain tip and sync status using cached value to avoid blocking
+	if g.cachedChainTip > 0 {
+		scanHeight := g.walletManager.GetScanHeight()
+		syncPercentage := float64(scanHeight) / float64(g.cachedChainTip) * 100.0
+		if syncPercentage > 100.0 {
+			syncPercentage = 100.0
+		}
+
 		g.chainTipLabel.SetText(
-			fmt.Sprintf("Chain Tip: %d (%.1f%% synced)", chainTip, syncPercentage),
+			fmt.Sprintf("Chain Tip: %d (%.1f%% synced)", g.cachedChainTip, syncPercentage),
 		)
 
 		// Color code the sync status
@@ -292,16 +305,40 @@ func (g *MainGUI) sortUTXOs() {
 func (g *MainGUI) startPeriodicUpdates() {
 	g.updateTicker = time.NewTicker(2 * time.Second) // Update every 2 seconds
 
+	// Start background chain tip updater (less frequent to avoid blocking)
+	go g.startChainTipUpdater()
+
 	go func() {
+		utxoRefreshCounter := 0
 		for range g.updateTicker.C {
 			// Only update if we have a main screen
 			if g.content != nil && g.scanStatusLabel != nil {
 				g.updateWalletInfo()
-				// Also refresh UTXOs periodically to keep the overview current
-				g.refreshUTXOs()
+
+				// Refresh UTXOs less frequently to reduce blocking (every 10 seconds instead of 2)
+				utxoRefreshCounter++
+				if utxoRefreshCounter >= 5 { // 5 * 2 seconds = 10 seconds
+					go g.refreshUTXOs() // Run in background goroutine
+					utxoRefreshCounter = 0
+				}
 			}
 		}
 	}()
+}
+
+// startChainTipUpdater runs a background goroutine to update chain tip cache
+func (g *MainGUI) startChainTipUpdater() {
+	ticker := time.NewTicker(30 * time.Second) // Update chain tip every 30 seconds
+	defer ticker.Stop()
+
+	for range ticker.C {
+		// Update chain tip in background without blocking UI
+		go func() {
+			if chainTip, err := g.walletManager.GetChainTip(); err == nil {
+				g.cachedChainTip = chainTip
+			}
+		}()
+	}
 }
 
 // stopPeriodicUpdates stops periodic updates
