@@ -1,13 +1,20 @@
 package manager
 
 import (
+	"bytes"
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
+	"time"
 
+	"github.com/btcsuite/btcd/wire"
 	"github.com/rs/zerolog"
 	"github.com/setavenger/blindbit-desktop/internal/scanner"
 	"github.com/setavenger/blindbit-lib/logging"
@@ -24,6 +31,22 @@ type LabelGUI struct {
 	Tweak   string `json:"tweak"`
 	Address string `json:"address"`
 	M       uint32 `json:"m"`
+}
+
+// TransactionResult represents the result of a transaction
+type TransactionResult struct {
+	TxID             string        `json:"txid"`
+	Hex              string        `json:"hex"`
+	PSBT             string        `json:"psbt"`
+	EffectiveFeeRate float64       `json:"effective_fee_rate"`
+	Size             int           `json:"size"`
+	Weight           int           `json:"weight"`
+	VSize            int           `json:"vsize"`
+	Fee              int64         `json:"fee"`
+	TotalInput       int64         `json:"total_input"`
+	TotalOutput      int64         `json:"total_output"`
+	Inputs           []*wire.TxIn  `json:"inputs"`
+	Outputs          []*wire.TxOut `json:"outputs"`
 }
 
 // Manager handles wallet operations and scanning
@@ -213,12 +236,12 @@ type UTXOGUI struct {
 // SendTransaction sends a transaction
 func (m *Manager) SendTransaction(
 	address string, amount int64, feeRate int64,
-) (string, error) {
+) (*TransactionResult, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	if m.wallet == nil {
-		return "", fmt.Errorf("no wallet loaded")
+		return nil, fmt.Errorf("no wallet loaded")
 	}
 
 	var recipientsImpl = []wallet.RecipientImpl{
@@ -239,14 +262,138 @@ func (m *Manager) SendTransaction(
 	)
 	if err != nil {
 		logging.L.Err(err).
-			Any("utxos", m.utxos).
+			// Any("utxos", m.utxos).
 			Msg("failed to build transaction")
-		return "", err
+		return nil, err
 	}
 
-	// For now, return a mock transaction ID
-	// TODO: Integrate with actual blindbit-wallet-cli sending functionality
-	return hex.EncodeToString(txBytes), err
+	// Parse transaction to get detailed information
+	result, err := m.parseTransactionDetails(txBytes)
+	if err != nil {
+		logging.L.Err(err).Msg("failed to parse transaction details")
+		return nil, fmt.Errorf("failed to parse transaction details: %w", err)
+	}
+
+	return result, nil
+}
+
+// parseTransactionDetails parses transaction bytes and extracts detailed information
+func (m *Manager) parseTransactionDetails(txBytes []byte) (*TransactionResult, error) {
+	// Parse the transaction
+	var tx wire.MsgTx
+	if err := tx.Deserialize(bytes.NewReader(txBytes)); err != nil {
+		return nil, fmt.Errorf("failed to deserialize transaction: %w", err)
+	}
+
+	// Calculate txid
+	txid := tx.TxHash().String()
+
+	// Calculate transaction size and weight
+	size := tx.SerializeSize()
+	weight := tx.SerializeSizeStripped()*3 + size
+	vsize := (weight + 3) / 4
+
+	// Calculate total input and output amounts
+	var totalInput, totalOutput int64
+
+	// Create a map of UTXOs for efficient lookup
+	utxoMap := make(map[string]uint64) // key: "txid:vout", value: amount
+	for _, utxo := range m.utxos {
+		key := fmt.Sprintf("%x:%d", utxo.Txid, utxo.Vout)
+		utxoMap[key] = utxo.Amount
+	}
+
+	// Calculate total input from our UTXOs
+	for _, txIn := range tx.TxIn {
+		key := fmt.Sprintf("%s:%d", txIn.PreviousOutPoint.Hash.String(), txIn.PreviousOutPoint.Index)
+		if amount, exists := utxoMap[key]; exists {
+			totalInput += int64(amount)
+		}
+	}
+
+	// Calculate total output
+	for _, txOut := range tx.TxOut {
+		totalOutput += txOut.Value
+	}
+
+	// Calculate fee and effective fee rate
+	fee := totalInput - totalOutput
+	effectiveFeeRate := float64(fee) / float64(vsize)
+
+	// Note: We cannot create a PSBT from a raw transaction directly
+	// PSBTs are created during the transaction building process, not from raw bytes
+	// For now, we'll leave PSBT empty until we integrate proper PSBT creation
+	var psbtHex string
+	// TODO: Implement proper PSBT creation during transaction building
+	// This would require modifying the wallet.SendToRecipients to return PSBT data
+
+	return &TransactionResult{
+		TxID:             txid,
+		Hex:              hex.EncodeToString(txBytes),
+		PSBT:             psbtHex,
+		EffectiveFeeRate: effectiveFeeRate,
+		Size:             size,
+		Weight:           weight,
+		VSize:            vsize,
+		Fee:              fee,
+		TotalInput:       totalInput,
+		TotalOutput:      totalOutput,
+		Inputs:           tx.TxIn,
+		Outputs:          tx.TxOut,
+	}, nil
+}
+
+// BroadcastTransaction broadcasts a transaction to the network via mempool.space API
+// It posts the raw hex as the request body to the appropriate endpoint based on network.
+func (m *Manager) BroadcastTransaction(txHex string) error {
+	m.mu.RLock()
+	network := string(m.GetNetwork())
+	m.mu.RUnlock()
+
+	// Determine base URL by network
+	var baseURL string
+	switch network {
+	case "mainnet", "":
+		baseURL = "https://mempool.space"
+	case "testnet":
+		baseURL = "https://mempool.space/testnet"
+	case "signet":
+		baseURL = "https://mempool.space/signet"
+	default:
+		return fmt.Errorf("broadcast not supported for network: %s", network)
+	}
+
+	url := baseURL + "/api/tx"
+
+	// Prepare request
+	body := strings.TrimSpace(txHex)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("creating request failed: %w", err)
+	}
+	req.Header.Set("Content-Type", "text/plain")
+	req.Header.Set("Accept", "text/plain")
+
+	// Execute
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("broadcast request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		// mempool.space returns error text in body
+		return fmt.Errorf("broadcast failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+	}
+
+	// On success, body contains the txid
+	txid := strings.TrimSpace(string(respBody))
+	logging.L.Info().Str("txid", txid).Msg("transaction broadcasted successfully")
+	return nil
 }
 
 // saveWalletConfig saves the wallet configuration

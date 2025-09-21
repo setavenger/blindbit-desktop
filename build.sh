@@ -19,4 +19,4 @@ echo "Building for current platform..."
 # go build -tags=libsecp256k1 -o blindbit-desktop ./cmd/blindbit-desktop
 go build -o ./bin/blindbit-desktop ./cmd/blindbit-desktop
 
-echo "Build complete! Run with: ./bin//blindbit-desktop" 
+echo "Build complete! Run with: ./bin/blindbit-desktop" 

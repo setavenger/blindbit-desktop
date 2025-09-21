@@ -77,10 +77,15 @@ func NewMainGUI(
 	// Initialize system tray manager
 	gui.trayManager = NewTrayManager(app, window)
 
-	// Initialize cached chain tip in background
+	// Initialize cached chain tip in background with delay to avoid blocking startup
 	go func() {
-		if chainTip, err := gui.walletManager.GetChainTip(); err == nil {
-			gui.cachedChainTip = chainTip
+		// Wait a bit for the UI to fully initialize before making network calls
+		time.Sleep(1 * time.Second)
+		// Only try to get chain tip if scanner is ready
+		if gui.walletManager.IsScannerReady() {
+			if chainTip, err := gui.walletManager.GetChainTip(); err == nil {
+				gui.cachedChainTip = chainTip
+			}
 		}
 	}()
 
@@ -179,7 +184,10 @@ func (g *MainGUI) updateWalletInfo() {
 	g.balanceLabel.SetText(fmt.Sprintf("Balance: %d sats", balance))
 
 	// Update scan status
-	if g.walletManager.IsScanning() {
+	if !g.walletManager.IsScannerReady() {
+		g.scanStatusLabel.SetText("Scan Status: Initializing...")
+		g.scanStatusLabel.TextStyle = fyne.TextStyle{}
+	} else if g.walletManager.IsScanning() {
 		g.scanStatusLabel.SetText("Scan Status: Scanning")
 		g.scanStatusLabel.TextStyle = fyne.TextStyle{Bold: true}
 	} else {
@@ -334,8 +342,11 @@ func (g *MainGUI) startChainTipUpdater() {
 	for range ticker.C {
 		// Update chain tip in background without blocking UI
 		go func() {
-			if chainTip, err := g.walletManager.GetChainTip(); err == nil {
-				g.cachedChainTip = chainTip
+			// Only try to get chain tip if scanner is ready
+			if g.walletManager.IsScannerReady() {
+				if chainTip, err := g.walletManager.GetChainTip(); err == nil {
+					g.cachedChainTip = chainTip
+				}
 			}
 		}()
 	}
@@ -401,4 +412,19 @@ func (g *MainGUI) restartApplication() error {
 	}
 	os.Exit(0)
 	return nil
+}
+
+// ShowTransactionDetails shows transaction details in a new window
+func (g *MainGUI) ShowTransactionDetails(result *manager.TransactionResult) {
+	// Create a new window for transaction details
+	txWindow := fyne.CurrentApp().NewWindow("Transaction Details")
+	txWindow.Resize(fyne.NewSize(800, 600))
+	txWindow.SetFixedSize(false) // Make it resizable
+
+	// Create transaction details tab
+	txTab := NewTransactionDetailsTab(txWindow, g.walletManager, result)
+	content := txTab.CreateTransactionDetailsView()
+
+	txWindow.SetContent(content)
+	txWindow.Show()
 }

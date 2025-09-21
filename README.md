@@ -93,7 +93,7 @@ The application has four main tabs:
 - Copy address to clipboard
 
 #### Settings Tab
-- Configure network (testnet/mainnet)
+- Configure network (testnet/mainnet/signet)
 - Other wallet settings
 
 ## Configuration
@@ -104,94 +104,7 @@ The application stores configuration in `~/.blindbit-desktop/blindbit.toml` by d
 - Oracle URL: https://silentpayments.dev/blindbit/mainnet
 - HTTP Port: 8080
 
-## Security Features
-
-- **Seed Generation**: Uses BIP39 for secure seed phrase generation
-- **BIP352 Integration**: Full support for Silent Payments
-- **Local Storage**: Wallet data stored locally with proper permissions
-- **Private Keys**: Never transmitted over network
-
-## Technical Details
-
-### Architecture
-
-The application is built using:
-- **Fyne v2**: Cross-platform GUI framework
-- **BIP352**: Silent Payment implementation
-- **BIP39**: Mnemonic seed generation
-- **HD Wallet**: Hierarchical deterministic wallet structure
-
-### Integration
-
-This desktop application integrates with:
-- **blindbit-scan**: For UTXO scanning and blockchain monitoring
-- **blindbit-wallet-cli**: For wallet operations and transaction creation
-
-### Data Storage
-
-Wallet data is stored in JSON format at `~/.blindbit-desktop/wallet.json` (or `<datadir>/wallet.json` when using `--datadir`):
-- Wallet configuration
-- UTXO list
-- Last scan height
-- Labels and addresses
-
-## Development
-
-### Project Structure
-
-```
-blindbit-desktop/
-├── cmd/
-│   └── blindbit-desktop/   # Main application binary
-│       └── main.go         # Application entry point
-├── go.mod                  # Go module definition
-├── internal/
-│   ├── gui/               # GUI components
-│   │   └── main.go        # Main GUI logic
-│   └── wallet/            # Wallet management
-│       └── manager.go     # Wallet operations
-├── build.sh               # Build script
-└── README.md              # This file
-```
-
-### Building for Distribution
-
-#### Windows
-```bash
-go build -ldflags -H=windowsgui -o blindbit-desktop.exe ./cmd/blindbit-desktop
-```
-
-#### macOS
-```bash
-go build -o blindbit-desktop ./cmd/blindbit-desktop
-```
-
-#### Linux
-```bash
-go build -o blindbit-desktop ./cmd/blindbit-desktop
-```
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
 ## Support
 
 For support and questions:
 - Open an issue on GitHub
-- Check the [blindbit-scan documentation](https://github.com/setavenger/blindbit-scan)
-- Check the [blindbit-wallet-cli documentation](https://github.com/setavenger/blindbit-wallet-cli)
-
-## Acknowledgments
-
-- [Fyne](https://fyne.io/) for the excellent GUI framework
-- [BIP352](https://github.com/bitcoin/bips/blob/master/bip-0352.mediawiki) for Silent Payments specification
-- The Bitcoin community for ongoing development and support

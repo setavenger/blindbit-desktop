@@ -66,6 +66,13 @@ func (m *Manager) IsScanning() bool {
 	return m.scanner.IsScanning()
 }
 
+// IsScannerReady returns whether the scanner is initialized and ready
+func (m *Manager) IsScannerReady() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.scanner != nil
+}
+
 // UpdateScanHeight updates the scan height (for real-time UI updates)
 func (m *Manager) UpdateScanHeight(height uint64) {
 	m.mu.Lock()

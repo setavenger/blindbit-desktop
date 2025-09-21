@@ -37,14 +37,18 @@ func (m *Manager) CreateWallet(seed string) error {
 		m.scanHeight, birthHeight,
 	)
 
-	if err := m.setupScanner(); err != nil {
-		return err
-	}
+	// Setup scanner in background to avoid blocking startup
+	go func() {
+		if err := m.setupScanner(); err != nil {
+			m.logger.Error().Err(err).Msg("failed to setup scanner during wallet creation")
+			return
+		}
 
-	// Clear scanner UTXOs for new wallet
-	if m.scanner != nil {
-		m.scanner.ClearUTXOs()
-	}
+		// Clear scanner UTXOs for new wallet
+		if m.scanner != nil {
+			m.scanner.ClearUTXOs()
+		}
+	}()
 
 	return m.saveWalletConfig()
 }
@@ -129,9 +133,12 @@ func (m *Manager) LoadWallet() error {
 	m.utxos = walletData.UTXOs
 	m.scanHeight = walletData.LastScanHeight
 
-	if err := m.setupScanner(); err != nil {
-		return err
-	}
+	// Setup scanner in background to avoid blocking startup
+	go func() {
+		if err := m.setupScanner(); err != nil {
+			m.logger.Error().Err(err).Msg("failed to setup scanner during startup")
+		}
+	}()
 
 	fmt.Printf("Wallet loaded: Network=%s, UTXOs=%d, ScanHeight=%d\n",
 		m.wallet.Network, len(m.utxos), m.scanHeight)

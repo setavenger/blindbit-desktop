@@ -52,12 +52,13 @@ func (g *MainGUI) sendTransaction(address, amountStr, feeRateStr string) {
 		return
 	}
 
-	txHex, err := g.walletManager.SendTransaction(address, amount, feeRate)
+	result, err := g.walletManager.SendTransaction(address, amount, feeRate)
 	if err != nil {
-		logging.L.Err(err).Str("tx_hex", txHex).Msg("failed to send transaction")
+		logging.L.Err(err).Msg("failed to send transaction")
 		dialog.ShowError(fmt.Errorf("failed to send transaction: %v", err), g.window)
 		return
 	}
 
-	fmt.Println("txHex:", txHex)
+	// Show transaction details in a new window
+	g.ShowTransactionDetails(result)
 }

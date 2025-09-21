@@ -127,7 +127,10 @@ func (s *Scanner) SyncToTipWithProgress(progressCallback func(uint64)) error {
 	}()
 
 	// block finishing has to be done sequentially. Spent utxos will not be consistent... maybe?
-	for !stopFlag {
+	blocksProcessed := 0
+	totalBlocks := int(chainTip - startHeight + 1)
+
+	for !stopFlag && blocksProcessed < totalBlocks {
 		select {
 		case <-s.stopChan:
 			stopFlag = true
@@ -154,6 +157,7 @@ func (s *Scanner) SyncToTipWithProgress(progressCallback func(uint64)) error {
 			}
 
 			s.lastScanHeight = height
+			blocksProcessed++
 
 			// Report progress via callback
 			progressCallback(height)
@@ -182,6 +186,7 @@ func (s *Scanner) SyncToTipWithProgress(progressCallback func(uint64)) error {
 				}
 
 				s.lastScanHeight = height
+				blocksProcessed++
 
 				// Report progress via callback
 				progressCallback(height)

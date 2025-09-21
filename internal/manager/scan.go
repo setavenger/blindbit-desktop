@@ -58,10 +58,13 @@ func (m *Manager) setupScanner() error {
 
 		// Also update UTXOs immediately when we reach the chain tip
 		// This ensures we get the latest data even if we don't hit the 100-block interval
-		chainTip, err := scanManger.Client.GetChainTip()
-		if err == nil && height >= chainTip {
-			m.UpdateUTXOsFromScanner()
-		}
+		// Run chain tip check in background to avoid blocking
+		go func() {
+			chainTip, err := scanManger.Client.GetChainTip()
+			if err == nil && height >= chainTip {
+				m.UpdateUTXOsFromScanner()
+			}
+		}()
 	})
 
 	// Set up UTXO update callback for immediate updates when new UTXOs are found
