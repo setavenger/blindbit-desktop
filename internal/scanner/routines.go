@@ -128,7 +128,7 @@ func (s *Scanner) ProcessBlockData(data *BlockData) ([]*wallet.OwnedUTXO, error)
 	}()
 
 	blockHeight := data.Height
-	s.logger.Info().Uint64("height", blockHeight).Msg("processing block")
+	s.logger.Debug().Uint64("height", blockHeight).Msg("processing block")
 
 	// Time the entire block scan
 	blockStart := time.Now()
@@ -143,11 +143,6 @@ func (s *Scanner) ProcessBlockData(data *BlockData) ([]*wallet.OwnedUTXO, error)
 	filterStart := time.Now()
 	potentialOutputs := s.precomputePotentialOutputs(tweaks)
 	filterDuration := time.Since(filterStart)
-	s.logger.Debug().
-		Uint64("height", blockHeight).
-		Dur("precompute_outputs", filterDuration).
-		Int("potential_outputs", len(potentialOutputs)).
-		Msg("timing")
 
 	// Check filter to see if any of our outputs might be in this block
 	if len(potentialOutputs) > 0 {
@@ -159,12 +154,7 @@ func (s *Scanner) ProcessBlockData(data *BlockData) ([]*wallet.OwnedUTXO, error)
 			// Continue without filter optimization
 		} else if !isMatch {
 			// No potential outputs in this block, skip expensive operations
-			filterCheckDuration := time.Since(filterCheckStart)
-			totalDuration := time.Since(blockStart)
 			s.logger.Info().Uint64("height", blockHeight).
-				Dur("total", totalDuration).
-				Dur("precompute_outputs", filterDuration).
-				Dur("filter_check", filterCheckDuration).
 				Int("tweaks", len(tweaks)).
 				Int("potential_outputs", len(potentialOutputs)).
 				Msg("block skipped - no potential outputs found")
@@ -185,11 +175,6 @@ func (s *Scanner) ProcessBlockData(data *BlockData) ([]*wallet.OwnedUTXO, error)
 		return nil, fmt.Errorf("failed to get UTXOs: %w", err)
 	}
 	utxoDuration := time.Since(utxoStart)
-	s.logger.Debug().
-		Uint64("height", blockHeight).
-		Dur("get_utxos", utxoDuration).
-		Int("utxo_count", len(utxos)).
-		Msg("timing")
 
 	// Time ScanDataOptimized
 	scanStart := time.Now()
@@ -273,7 +258,7 @@ func (s *Scanner) ProcessBlockData(data *BlockData) ([]*wallet.OwnedUTXO, error)
 
 	// Log total block scan time and breakdown
 	totalDuration := time.Since(blockStart)
-	s.logger.Info().Uint64("height", blockHeight).
+	s.logger.Trace().Uint64("height", blockHeight).
 		Dur("total", totalDuration).
 		Dur("precompute_outputs", filterDuration).
 		Dur("get_utxos", utxoDuration).

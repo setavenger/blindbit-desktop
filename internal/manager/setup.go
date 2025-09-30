@@ -100,34 +100,34 @@ func (m *Manager) createWalletInternal(seed string, network types.Network) error
 
 // LoadWallet loads an existing wallet
 func (m *Manager) LoadWallet() error {
-	fmt.Println("Starting LoadWallet...")
+	logging.L.Debug().Msg("Starting LoadWallet...")
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	// Check if wallet exists
 	walletPath := filepath.Join(m.dataDir, "wallet.json")
-	fmt.Printf("Wallet path: %s\n", walletPath)
+	logging.L.Debug().Str("wallet_path", walletPath).Msg("Wallet path")
 	if _, err := os.Stat(walletPath); os.IsNotExist(err) {
-		fmt.Println("Wallet file does not exist")
+		logging.L.Debug().Msg("Wallet file does not exist")
 		return fmt.Errorf("no wallet found")
 	}
 
 	// Load wallet data
-	fmt.Println("Reading wallet file...")
+	logging.L.Debug().Msg("Reading wallet file...")
 	data, err := os.ReadFile(walletPath)
 	if err != nil {
-		fmt.Printf("Error reading wallet file: %v\n", err)
+		logging.L.Debug().Err(err).Msg("Error reading wallet file")
 		return fmt.Errorf("failed to read wallet file: %w", err)
 	}
-	fmt.Printf("Wallet file read, size: %d bytes\n", len(data))
+	logging.L.Debug().Int("wallet_size", len(data)).Msg("Wallet file read")
 
 	var walletData wallet.Wallet
-	fmt.Println("Unmarshaling wallet data...")
+	logging.L.Debug().Msg("Unmarshaling wallet data...")
 	if err := json.Unmarshal(data, &walletData); err != nil {
-		fmt.Printf("Error unmarshaling wallet data: %v\n", err)
+		logging.L.Debug().Err(err).Msg("Error unmarshaling wallet data")
 		return fmt.Errorf("failed to unmarshal wallet data: %w", err)
 	}
-	fmt.Println("Wallet data unmarshaled successfully")
+	logging.L.Debug().Msg("Wallet data unmarshaled successfully")
 
 	m.wallet = &walletData
 	m.utxos = walletData.UTXOs
@@ -140,8 +140,11 @@ func (m *Manager) LoadWallet() error {
 		}
 	}()
 
-	fmt.Printf("Wallet loaded: Network=%s, UTXOs=%d, ScanHeight=%d\n",
-		m.wallet.Network, len(m.utxos), m.scanHeight)
+	logging.L.Debug().
+		Str("network", string(m.wallet.Network)).
+		Int("utxos", len(m.utxos)).
+		Uint64("scan_height", m.scanHeight).
+		Msg("Wallet loaded")
 
 	return nil
 }

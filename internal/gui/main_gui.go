@@ -14,6 +14,7 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 	"github.com/setavenger/blindbit-desktop/internal/manager"
+	"github.com/setavenger/blindbit-lib/logging"
 )
 
 // MainGUI represents the main GUI application
@@ -88,6 +89,11 @@ func NewMainGUI(
 			}
 		}
 	}()
+
+	// per default start scanning
+	if err := gui.walletManager.StartScanning(); err != nil {
+		logging.L.Fatal().Err(err).Msg("failed to start scanner")
+	}
 
 	// Start periodic updates
 	gui.startPeriodicUpdates()

@@ -347,10 +347,8 @@ github.com/sagikazarmark/locafero v0.4.0/go.mod h1:Pe1W6UlPYUk/+wc/6KFhbORCfqzgY
 github.com/sagikazarmark/slog-shim v0.1.0 h1:diDBnUNK9N/354PgrxMywXnAwEr1QZcOr6gto+ugjYE=
 github.com/sagikazarmark/slog-shim v0.1.0/go.mod h1:SrcSrq8aKtyuqEI1uvTDTK1arOWRIczQRv+GVI1AkeQ=
 github.com/sean-/seed v0.0.0-20170313163322-e2103e2c3529/go.mod h1:DxrIzT+xaE7yg65j358z/aeFdxmN0P9QXhEzd20vsDc=
-github.com/setavenger/blindbit-lib v0.0.2-0.20250918153820-dc047d853b25 h1:4zC6zkgl0JXgXH0eBE+HSELDmPVbTqrrcVVNfKjKYjw=
-github.com/setavenger/blindbit-lib v0.0.2-0.20250918153820-dc047d853b25/go.mod h1:dwXKnPcIxk5sVkAPurcE9vc0Rji/hwkFSn1gj13M3sA=
-github.com/setavenger/blindbit-lib v0.0.2-0.20250919190755-6429453c97c9 h1:WP1/Gurd2x6c0ihfVylhT2dxPa373xyHIms1KT/2DhQ=
-github.com/setavenger/blindbit-lib v0.0.2-0.20250919190755-6429453c97c9/go.mod h1:4QFsIzwbpyIn18dhMca4l2Hq20jEHqA48GS0iZn2lJI=
+github.com/setavenger/blindbit-lib v0.0.2-0.20250930172103-5b03c1a4dc2d h1:6CBHM3S4tMwL+l2EI1dB9hASNH3kBG58k5mc8xIryMs=
+github.com/setavenger/blindbit-lib v0.0.2-0.20250930172103-5b03c1a4dc2d/go.mod h1:HhVqrcCT2A9GiNXOHnr5n2HI3zqaZscnPDVFf2MF+5s=
 github.com/setavenger/blindbit-scan v0.1.2-0.20250918153639-e217b21becad h1:p0rceVaZKe/qrYwJsBwVSzERRTlDXrjgJLYepdhltFQ=
 github.com/setavenger/blindbit-scan v0.1.2-0.20250918153639-e217b21becad/go.mod h1:57DLuYRNWOotI0AO8P7YDjIplPFeZdIYouWpwEXXqGs=
 github.com/setavenger/go-bip352 v0.1.9-0.20250919170152-7683068d2f35 h1:SO7qG88fWMhINMfcTUvbUAupJcYBipCZ4od81/tB+UI=
