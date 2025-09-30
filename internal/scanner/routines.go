@@ -15,11 +15,8 @@ func (s *Scanner) FinishBlock(data *BlockData) error {
 	height := data.Height
 	ownedUTXOs := data.OwnedUTXOs
 
-	err := s.MarkSpentUTXOs(data)
-	if err != nil {
-		s.logger.Err(err).Msg("failed to mark utxos as spent")
-		return err
-	}
+	// Add UTXOs first, then check for spending
+	// This ensures UTXOs received and spent in the same block are handled correctly
 	if len(ownedUTXOs) > 0 {
 		s.logger.Info().
 			Uint64("height", height).
@@ -36,6 +33,13 @@ func (s *Scanner) FinishBlock(data *BlockData) error {
 				s.utxoUpdateCallback()
 			}
 		}
+	}
+
+	// Now check for spending (including same-block spending)
+	err := s.MarkSpentUTXOs(data)
+	if err != nil {
+		s.logger.Err(err).Msg("failed to mark utxos as spent")
+		return err
 	}
 
 	return nil
