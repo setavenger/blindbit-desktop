@@ -55,7 +55,7 @@ func (g *MainGUI) sendTransaction(address, amountStr, feeRateStr string) {
 	result, err := g.walletManager.SendTransaction(address, amount, feeRate)
 	if err != nil {
 		logging.L.Err(err).Msg("failed to send transaction")
-		dialog.ShowError(fmt.Errorf("failed to send transaction: %v", err), g.window)
+		dialog.ShowError(fmt.Errorf("failed to build transaction: %v", err), g.window)
 		return
 	}
 
