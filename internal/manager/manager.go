@@ -132,16 +132,27 @@ func getDataDir() string {
 	return dataDir
 }
 
+// Network constants
+const (
+	NetworkTestnet = "testnet"
+	NetworkMainnet = "mainnet"
+	NetworkSignet  = "signet"
+	NetworkRegtest = "regtest"
+)
+
+// Default network configuration
+const DefaultNetwork = NetworkMainnet
+
 // setDefaultConfig sets default configuration values
 func setDefaultConfig(config *viper.Viper) {
-	config.SetDefault("network", "testnet")
-	config.SetDefault("oracle_url", "https://silentpayments.dev/blindbit/mainnet")
+	config.SetDefault("network", DefaultNetwork)
+	config.SetDefault("oracle_url", "https://silentpayments.dev/blindbit/mainnet") // Default for mainnet
 	// config.SetDefault("http_port", 8080)
 	// todo: this is probably not relevant anymore
 	// config.SetDefault("private_mode", false)
 	config.SetDefault("dust_limit", 546)
 	config.SetDefault("label_count", 0)
-	// todo: change to chain-tip minus a couple blocks
+	// Default birth height for mainnet
 	config.SetDefault("birth_height", 900000)
 	config.SetDefault("min_change_amount", 546)
 }
@@ -345,7 +356,8 @@ func (m *Manager) parseTransactionDetails(txBytes []byte) (*TransactionResult, e
 
 // BroadcastTransaction broadcasts a transaction to the network via mempool.space API
 // It posts the raw hex as the request body to the appropriate endpoint based on network.
-func (m *Manager) BroadcastTransaction(txHex string) error {
+// After successful broadcast, marks the transaction inputs as spent.
+func (m *Manager) BroadcastTransaction(txHex string, txInputs []*wire.TxIn) error {
 	m.mu.RLock()
 	network := string(m.GetNetwork())
 	m.mu.RUnlock()
@@ -393,6 +405,16 @@ func (m *Manager) BroadcastTransaction(txHex string) error {
 	// On success, body contains the txid
 	txid := strings.TrimSpace(string(respBody))
 	logging.L.Info().Str("txid", txid).Msg("transaction broadcasted successfully")
+
+	// Mark UTXOs as spent after successful broadcast
+	if len(txInputs) > 0 {
+		markedCount := m.MarkUTXOsAsSpent(txInputs)
+		logging.L.Info().
+			Str("txid", txid).
+			Int("marked_utxos", markedCount).
+			Msg("marked UTXOs as spent after successful broadcast")
+	}
+
 	return nil
 }
 

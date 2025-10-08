@@ -12,6 +12,13 @@ import (
 	"github.com/setavenger/blindbit-lib/logging"
 )
 
+// SendTabFields holds references to the send tab form fields
+type SendTabFields struct {
+	AddressEntry *widget.Entry
+	AmountEntry  *widget.Entry
+	FeeRateEntry *widget.Entry
+}
+
 // createSendTab creates the send tab
 func (g *MainGUI) createSendTab() *fyne.Container {
 	addressEntry := widget.NewEntry()
@@ -22,6 +29,13 @@ func (g *MainGUI) createSendTab() *fyne.Container {
 
 	feeRateEntry := widget.NewEntry()
 	feeRateEntry.SetPlaceHolder("Fee rate (sats/vB)")
+
+	// Store references to the fields for later reset
+	g.sendTabFields = &SendTabFields{
+		AddressEntry: addressEntry,
+		AmountEntry:  amountEntry,
+		FeeRateEntry: feeRateEntry,
+	}
 
 	sendButton := widget.NewButtonWithIcon("Send", theme.MailSendIcon(), func() {
 		g.sendTransaction(addressEntry.Text, amountEntry.Text, feeRateEntry.Text)
@@ -61,4 +75,14 @@ func (g *MainGUI) sendTransaction(address, amountStr, feeRateStr string) {
 
 	// Show transaction details in a new window
 	g.ShowTransactionDetails(result)
+}
+
+// ResetSendTabFields clears all the send tab form fields
+// This method implements the SendTabResetter interface
+func (g *MainGUI) ResetSendTabFields() {
+	if g.sendTabFields != nil {
+		g.sendTabFields.AddressEntry.SetText("")
+		g.sendTabFields.AmountEntry.SetText("")
+		g.sendTabFields.FeeRateEntry.SetText("")
+	}
 }

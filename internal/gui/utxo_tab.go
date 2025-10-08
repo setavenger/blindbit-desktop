@@ -44,8 +44,22 @@ func (g *MainGUI) createUTXOOverviewTab() *fyne.Container {
 		syncStatusLabel.Refresh()
 	}
 
-	// Use the shared UTXO table component
-	utxoList := g.createUTXOTable()
+	// UTXO filter options
+	filterSelect := widget.NewSelect([]string{"Unspent Only", "All UTXOs"}, func(value string) {
+		// Update the table filter when selection changes
+		if g.utxoList != nil {
+			g.utxoList.Refresh()
+		}
+	})
+	filterSelect.SetSelected("Unspent Only") // Default to unspent only
+
+	// Use the shared UTXO table component with filter
+	utxoList := g.createUTXOTableWithFilter(func() []string {
+		if filterSelect.Selected == "All UTXOs" {
+			return []string{"unspent", "spent"} // Show all states
+		}
+		return []string{"unspent"} // Default to unspent only
+	})
 
 	// Control buttons
 	refreshButton := widget.NewButtonWithIcon("Refresh UTXOs", theme.ViewRefreshIcon(), func() {
@@ -89,6 +103,9 @@ func (g *MainGUI) createUTXOOverviewTab() *fyne.Container {
 		widget.NewSeparator(),
 		container.NewHBox(refreshButton, clearButton),
 		container.NewHBox(scanButton, stopButton),
+		widget.NewSeparator(),
+		widget.NewLabel("Filter:"),
+		filterSelect,
 		widget.NewSeparator(),
 	)
 

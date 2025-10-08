@@ -8,12 +8,13 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-// createUTXOTable creates a reusable UTXO table widget
-func (g *MainGUI) createUTXOTable() *widget.Table {
+// createUTXOTableWithFilter creates a UTXO table widget with dynamic filtering
+func (g *MainGUI) createUTXOTableWithFilter(filterFunc func() []string) *widget.Table {
 	utxoList := widget.NewTable(
 		func() (int, int) {
-			// todo: add option to filter by state
-			length := g.UtxoCount()
+			// Count UTXOs based on current filter
+			states := filterFunc()
+			length := g.UtxoCount(states...)
 			return length, 5 // 5 columns: TxID:Vout, Amount, State, Label, Timestamp
 		},
 		func() fyne.CanvasObject {
@@ -25,8 +26,12 @@ func (g *MainGUI) createUTXOTable() *widget.Table {
 		func(i widget.TableCellID, o fyne.CanvasObject) {
 			cellContainer := o.(*fyne.Container)
 			label := cellContainer.Objects[0].(*widget.Label)
-			if i.Row < len(g.utxoData) {
-				utxo := g.utxoData[i.Row]
+
+			// Get filtered UTXOs based on current filter
+			states := filterFunc()
+			filteredUTXOs := g.getFilteredUTXOs(states...)
+			if i.Row < len(filteredUTXOs) {
+				utxo := filteredUTXOs[i.Row]
 				switch i.Col {
 				case 0: // TxID:Vout combined
 					txid := utxo.TxID
@@ -43,6 +48,9 @@ func (g *MainGUI) createUTXOTable() *widget.Table {
 				case 4: // Timestamp
 					label.SetText(utxo.Timestamp)
 				}
+			} else {
+				// Handle out of bounds case gracefully
+				label.SetText("")
 			}
 		},
 	)

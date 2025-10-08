@@ -16,20 +16,14 @@ func (g *MainGUI) createWelcomeScreen() *fyne.Container {
 	description := widget.NewLabel("Create a new wallet or import an existing one to get started.")
 	description.Alignment = fyne.TextAlignCenter
 
-	createButton := widget.NewButtonWithIcon("Create New Wallet", theme.ContentAddIcon(), func() {
+	createButton := widget.NewButtonWithIcon("Create/Import Wallet", theme.ContentAddIcon(), func() {
 		g.showCreateWalletDialog()
 	})
-
-	importButton := widget.NewButtonWithIcon("Import Wallet", theme.FolderOpenIcon(), func() {
-		g.showImportWalletDialog()
-	})
-
-	buttons := container.NewHBox(createButton, importButton)
 
 	return container.NewVBox(
 		title,
 		description,
 		widget.NewSeparator(),
-		buttons,
+		createButton,
 	)
 }

@@ -12,8 +12,10 @@ import (
 
 // createOverviewTab creates the overview tab
 func (g *MainGUI) createOverviewTab() *fyne.Container {
-	// Use the shared UTXO table component
-	g.utxoList = g.createUTXOTable()
+	// Use the shared UTXO table component (unspent only for overview)
+	g.utxoList = g.createUTXOTableWithFilter(func() []string {
+		return []string{"unspent"} // Overview tab shows only unspent UTXOs
+	})
 
 	// Scan controls with better UX
 	scanButton := widget.NewButtonWithIcon("Start Scanning", theme.MediaPlayIcon(), func() {

@@ -31,9 +31,10 @@ type MainGUI struct {
 	utxoList        *widget.Table
 	utxoData        []UTXODisplay
 	updateTicker    *time.Ticker
-	cachedAddress   string       // Cache the address to avoid constant regeneration
-	cachedChainTip  uint64       // Cache chain tip to avoid blocking network calls
-	trayManager     *TrayManager // System tray manager
+	cachedAddress   string         // Cache the address to avoid constant regeneration
+	cachedChainTip  uint64         // Cache chain tip to avoid blocking network calls
+	trayManager     *TrayManager   // System tray manager
+	sendTabFields   *SendTabFields // References to send tab form fields
 }
 
 // UTXODisplay represents a UTXO for display in the GUI
@@ -64,6 +65,22 @@ func (g *MainGUI) UtxoCount(states ...string) int {
 	return count
 }
 
+// getFilteredUTXOs returns UTXOs filtered by state
+func (g *MainGUI) getFilteredUTXOs(states ...string) []UTXODisplay {
+	if len(states) == 0 {
+		// Default to unspent only
+		states = []string{"unspent"}
+	}
+
+	var filtered []UTXODisplay
+	for _, utxo := range g.utxoData {
+		if slices.Contains(states, utxo.State) {
+			filtered = append(filtered, utxo)
+		}
+	}
+	return filtered
+}
+
 // NewMainGUI creates a new main GUI instance
 func NewMainGUI(
 	app fyne.App, window fyne.Window, walletManager *manager.Manager,
@@ -90,9 +107,13 @@ func NewMainGUI(
 		}
 	}()
 
-	// per default start scanning
-	if err := gui.walletManager.StartScanning(); err != nil {
-		logging.L.Fatal().Err(err).Msg("failed to start scanner")
+	// Start scanning only if wallet is loaded
+	if gui.walletManager.HasWallet() {
+		if err := gui.walletManager.StartScanning(); err != nil {
+			logging.L.Fatal().Err(err).Msg("failed to start scanner")
+		}
+	} else {
+		logging.L.Info().Msg("no wallet found, skipping scanner startup")
 	}
 
 	// Start periodic updates
@@ -428,7 +449,7 @@ func (g *MainGUI) ShowTransactionDetails(result *manager.TransactionResult) {
 	txWindow.SetFixedSize(false) // Make it resizable
 
 	// Create transaction details tab
-	txTab := NewTransactionDetailsTab(txWindow, g.walletManager, result)
+	txTab := NewTransactionDetailsTab(txWindow, g.walletManager, result, g)
 	content := txTab.CreateTransactionDetailsView()
 
 	txWindow.SetContent(content)

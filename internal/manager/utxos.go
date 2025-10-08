@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 
+	"github.com/btcsuite/btcd/wire"
 	"github.com/setavenger/blindbit-lib/wallet"
 )
 
@@ -63,6 +64,71 @@ func (m *Manager) GetBalance() uint64 {
 	}
 	// Removed debug logging to reduce log noise
 	return balance
+}
+
+// MarkUTXOsAsSpent marks UTXOs as spent based on transaction inputs (outpoints)
+func (m *Manager) MarkUTXOsAsSpent(txInputs []*wire.TxIn) int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	markedCount := 0
+
+	// Create a map of UTXOs for efficient lookup by txid:vout
+	utxoMap := make(map[string]*wallet.OwnedUTXO)
+	for _, utxo := range m.utxos {
+		key := fmt.Sprintf("%x:%d", utxo.Txid, utxo.Vout)
+		utxoMap[key] = utxo
+	}
+
+	// Mark UTXOs as spent based on transaction inputs
+	for _, txIn := range txInputs {
+		key := fmt.Sprintf("%s:%d", txIn.PreviousOutPoint.Hash.String(), txIn.PreviousOutPoint.Index)
+		if utxo, exists := utxoMap[key]; exists && utxo.State == wallet.StateUnspent {
+			utxo.State = wallet.StateSpent
+			markedCount++
+			m.logger.Info().
+				Str("txid", fmt.Sprintf("%x", utxo.Txid[:])).
+				Uint32("vout", utxo.Vout).
+				Msg("marked UTXO as spent after broadcast")
+		}
+	}
+
+	if markedCount > 0 {
+		// Update scanner's UTXO state
+		if m.scanner != nil {
+			m.updateScannerUTXOStates()
+		}
+
+		// Save the updated state
+		if err := m.saveWalletConfig(); err != nil {
+			m.logger.Error().Err(err).Msg("failed to save wallet config after marking UTXOs as spent")
+		}
+	}
+
+	return markedCount
+}
+
+// updateScannerUTXOStates updates the scanner's UTXO states to match the manager's
+func (m *Manager) updateScannerUTXOStates() {
+	if m.scanner == nil {
+		return
+	}
+
+	// Create a map of manager UTXOs for efficient lookup
+	managerUTXOs := make(map[string]wallet.UTXOState)
+	for _, utxo := range m.utxos {
+		key := fmt.Sprintf("%x:%d", utxo.Txid, utxo.Vout)
+		managerUTXOs[key] = utxo.State
+	}
+
+	// Update scanner UTXOs to match manager state
+	scannerUTXOs := m.scanner.GetAllOwnedUTXOs()
+	for _, scannerUTXO := range scannerUTXOs {
+		key := fmt.Sprintf("%x:%d", scannerUTXO.Txid, scannerUTXO.Vout)
+		if managerState, exists := managerUTXOs[key]; exists {
+			scannerUTXO.State = wallet.UTXOState(managerState)
+		}
+	}
 }
 
 // UpdateUTXOsFromScanner updates the manager's UTXOs from the scanner's found UTXOs

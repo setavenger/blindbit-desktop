@@ -9,28 +9,36 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/setavenger/blindbit-desktop/internal/manager"
 	"github.com/setavenger/blindbit-lib/logging"
 )
 
 // TransactionDetailsTab represents the transaction details view
 type TransactionDetailsTab struct {
-	window        fyne.Window
-	walletManager WalletManager
-	result        *manager.TransactionResult
+	window          fyne.Window
+	walletManager   WalletManager
+	result          *manager.TransactionResult
+	sendTabResetter SendTabResetter // Interface for resetting send tab fields
 }
 
 // WalletManager interface for wallet operations
 type WalletManager interface {
-	BroadcastTransaction(hex string) error
+	BroadcastTransaction(hex string, txInputs []*wire.TxIn) error
+}
+
+// SendTabResetter interface for resetting send tab fields
+type SendTabResetter interface {
+	ResetSendTabFields()
 }
 
 // NewTransactionDetailsTab creates a new transaction details tab
-func NewTransactionDetailsTab(window fyne.Window, walletManager WalletManager, result *manager.TransactionResult) *TransactionDetailsTab {
+func NewTransactionDetailsTab(window fyne.Window, walletManager WalletManager, result *manager.TransactionResult, sendTabResetter SendTabResetter) *TransactionDetailsTab {
 	return &TransactionDetailsTab{
-		window:        window,
-		walletManager: walletManager,
-		result:        result,
+		window:          window,
+		walletManager:   walletManager,
+		result:          result,
+		sendTabResetter: sendTabResetter,
 	}
 }
 
@@ -218,7 +226,7 @@ func (td *TransactionDetailsTab) broadcastTransaction() {
 		"Are you sure you want to broadcast this transaction to the network?",
 		func(confirmed bool) {
 			if confirmed {
-				err := td.walletManager.BroadcastTransaction(td.result.Hex)
+				err := td.walletManager.BroadcastTransaction(td.result.Hex, td.result.Inputs)
 				if err != nil {
 					logging.L.Err(err).Msg("failed to broadcast transaction")
 					dialog.ShowError(fmt.Errorf("failed to broadcast transaction: %v", err), td.window)
@@ -228,6 +236,11 @@ func (td *TransactionDetailsTab) broadcastTransaction() {
 				dialog.ShowInformation("Transaction Broadcasted",
 					fmt.Sprintf("Transaction %s has been successfully broadcasted to the network!", td.result.TxID),
 					td.window)
+
+				// Reset send tab fields after successful broadcast
+				if td.sendTabResetter != nil {
+					td.sendTabResetter.ResetSendTabFields()
+				}
 			}
 		}, td.window)
 }

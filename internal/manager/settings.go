@@ -14,6 +14,19 @@ func (m *Manager) SetNetwork(network types.Network) error {
 	// Update config
 	m.config.Set("network", string(network))
 
+	// Set network-specific defaults
+	switch network {
+	case NetworkSignet:
+		m.config.Set("oracle_url", "https://silentpayments.dev/blindbit/signet")
+		m.config.Set("birth_height", 240000)
+	case NetworkMainnet:
+		m.config.Set("oracle_url", "https://silentpayments.dev/blindbit/mainnet")
+		m.config.Set("birth_height", 900000) // Keep existing mainnet default
+	default:
+		m.config.Set("oracle_url", "")
+		m.config.Set("birth_height", 0)
+	}
+
 	// Save config
 	if err := m.config.WriteConfig(); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
