@@ -68,14 +68,19 @@ func (g *MainGUI) createUTXOOverviewTab() *fyne.Container {
 	})
 
 	clearButton := widget.NewButtonWithIcon("Clear UTXOs", theme.DeleteIcon(), func() {
-		dialog.ShowConfirm("Clear UTXOs", "Are you sure you want to clear all UTXOs? This action cannot be undone.", func(clear bool) {
-			if clear {
-				g.walletManager.ClearUTXOs()
-				g.refreshUTXOs()
-				updateStats()
-				dialog.ShowInformation("UTXOs Cleared", "All UTXOs have been cleared.", g.window)
-			}
-		}, g.window)
+		dialog.ShowConfirm(
+			"Clear UTXOs",
+			"Are you sure you want to clear all UTXOs? This action cannot be undone.",
+			func(clear bool) {
+				if clear {
+					g.walletManager.ClearUTXOs()
+					g.refreshUTXOs()
+					updateStats()
+					dialog.ShowInformation("UTXOs Cleared", "All UTXOs have been cleared.", g.window)
+				}
+			},
+			g.window,
+		)
 	})
 
 	scanButton := widget.NewButtonWithIcon("Start Scanning", theme.MediaPlayIcon(), func() {

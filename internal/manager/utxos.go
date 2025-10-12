@@ -8,6 +8,16 @@ import (
 	"github.com/setavenger/blindbit-lib/wallet"
 )
 
+// GetUTXOs returns all UTXOs from the scan wallet
+func (m *Manager) GetUTXOs() ([]*wallet.OwnedUTXO, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	// For now, return stored UTXOs
+	// TODO: Integrate with actual blindbit-scan scanning
+	return m.utxos, nil
+}
+
 // RefreshUTXOs manually refreshes UTXOs from the scanner
 func (m *Manager) RefreshUTXOs() {
 	m.UpdateUTXOsFromScanner()
@@ -99,10 +109,12 @@ func (m *Manager) MarkUTXOsAsSpent(txInputs []*wire.TxIn) int {
 			m.updateScannerUTXOStates()
 		}
 
-		// Save the updated state
-		if err := m.saveWalletConfig(); err != nil {
-			m.logger.Error().Err(err).Msg("failed to save wallet config after marking UTXOs as spent")
-		}
+		// Save the updated state (without lock to avoid deadlock)
+		go func() {
+			if err := m.saveWalletConfig(); err != nil {
+				m.logger.Error().Err(err).Msg("failed to save wallet config after marking UTXOs as spent")
+			}
+		}()
 	}
 
 	return markedCount
@@ -170,12 +182,22 @@ func (m *Manager) UpdateUTXOsFromScanner() {
 		existingUTXOs[key] = utxo
 	}
 
+	// Collect new UTXOs for transaction history (to avoid deadlock)
+	var newUTXOsForHistory []*wallet.OwnedUTXO
+
 	// Merge new UTXOs with existing ones, updating existing ones
 	for _, newUTXO := range scannedUtxos {
 		// todo: optimize to byte array key
 		var key [36]byte
 		copy(key[:], newUTXO.Txid[:])
 		binary.PutUvarint(key[32:], uint64(newUTXO.Vout))
+
+		// Check if this is a new UTXO (incoming transaction)
+		if _, exists := existingUTXOs[key]; !exists {
+			// This is a new UTXO, collect it for transaction history
+			newUTXOsForHistory = append(newUTXOsForHistory, newUTXO)
+		}
+
 		existingUTXOs[key] = newUTXO
 	}
 
@@ -193,8 +215,27 @@ func (m *Manager) UpdateUTXOsFromScanner() {
 			Msg("merged UTXOs from scanner")
 	}
 
-	// Save to disk
-	if err := m.saveWalletConfig(); err != nil {
-		m.logger.Error().Err(err).Msg("failed to save wallet config after UTXO update")
+	// Save to disk (without lock to avoid deadlock)
+	go func() {
+		if err := m.saveWalletConfig(); err != nil {
+			m.logger.Error().Err(err).Msg("failed to save wallet config after UTXO update")
+		}
+	}()
+
+	// Add new transactions to history (without lock to avoid deadlock)
+	if len(newUTXOsForHistory) > 0 {
+		go func() {
+			// Get the current scan height from scanner to mark transactions as confirmed
+			// Note: This represents the height of the block that was just scanned
+			currentScanHeight := m.scanner.GetLastScanHeight()
+			for _, utxo := range newUTXOsForHistory {
+				txid := fmt.Sprintf("%x", utxo.Txid[:])
+				// Use the new method that sets confirmed=true and block height
+				// Transactions found during scanning are confirmed by definition
+				m.addIncomingTransactionToHistoryWithBlockHeight(txid, utxo, currentScanHeight)
+			}
+			// Auto-reconcile after adding new transactions
+			m.autoReconcileTransactionHistory()
+		}()
 	}
 }

@@ -31,10 +31,11 @@ type MainGUI struct {
 	utxoList        *widget.Table
 	utxoData        []UTXODisplay
 	updateTicker    *time.Ticker
-	cachedAddress   string         // Cache the address to avoid constant regeneration
-	cachedChainTip  uint64         // Cache chain tip to avoid blocking network calls
-	trayManager     *TrayManager   // System tray manager
-	sendTabFields   *SendTabFields // References to send tab form fields
+	cachedAddress   string                  // Cache the address to avoid constant regeneration
+	cachedChainTip  uint64                  // Cache chain tip to avoid blocking network calls
+	trayManager     *TrayManager            // System tray manager
+	sendTabFields   *SendTabFields          // References to send tab form fields
+	transactionTab  *TransactionOverviewTab // Reference to transaction overview tab for refresh
 }
 
 // UTXODisplay represents a UTXO for display in the GUI
@@ -167,12 +168,14 @@ func (g *MainGUI) createMainScreen() *fyne.Container {
 	// Create tabs for different sections
 	overviewTab := g.createOverviewTab()
 	utxoOverviewTab := g.createUTXOOverviewTab()
+	transactionOverviewTab := g.createTransactionOverviewTab()
 	sendTab := g.createSendTab()
 	receiveTab := g.createReceiveTab()
 	settingsTab := g.createSettingsTab()
 
 	tabs := container.NewAppTabs(
 		container.NewTabItem("Overview", overviewTab),
+		container.NewTabItem("Transactions", transactionOverviewTab),
 		container.NewTabItem("UTXOs", utxoOverviewTab),
 		container.NewTabItem("Send", sendTab),
 		container.NewTabItem("Receive", receiveTab),
@@ -415,6 +418,13 @@ func (g *MainGUI) UpdateTrayTitle(title string) {
 	}
 }
 
+// RefreshTransactionHistory refreshes the transaction history tab
+func (g *MainGUI) RefreshTransactionHistory() {
+	if g.transactionTab != nil {
+		g.transactionTab.RefreshTransactions()
+	}
+}
+
 // restartApplication attempts to re-execute the current binary with the same arguments, then exits the current process.
 func (g *MainGUI) restartApplication() error {
 	exePath, err := os.Executable()
@@ -449,9 +459,15 @@ func (g *MainGUI) ShowTransactionDetails(result *manager.TransactionResult) {
 	txWindow.SetFixedSize(false) // Make it resizable
 
 	// Create transaction details tab
-	txTab := NewTransactionDetailsTab(txWindow, g.walletManager, result, g)
+	txTab := NewTransactionDetailsTab(txWindow, g.walletManager, result, g, g)
 	content := txTab.CreateTransactionDetailsView()
 
 	txWindow.SetContent(content)
 	txWindow.Show()
+}
+
+// createTransactionOverviewTab creates the transaction overview tab
+func (g *MainGUI) createTransactionOverviewTab() *fyne.Container {
+	g.transactionTab = NewTransactionOverviewTab(g.walletManager)
+	return g.transactionTab.GetContent()
 }

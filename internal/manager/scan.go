@@ -77,23 +77,6 @@ func (m *Manager) setupScanner() error {
 	return nil
 }
 
-// RescanFromTip rescans from the current chain tip
-// Deprecated: Nonsense function from AI
-func (m *Manager) RescanFromTip() error {
-	if m.scanner == nil {
-		return fmt.Errorf("scanner not initialized")
-	}
-
-	// Get current chain tip
-	chainTip, err := m.scanner.Client.GetChainTip()
-	if err != nil {
-		return fmt.Errorf("failed to get chain tip: %w", err)
-	}
-
-	fmt.Printf("[RescanFromTip] Rescanning from chain tip: %d\n", chainTip)
-	return m.RescanFromHeight(chainTip)
-}
-
 // RescanFromHeight resets the last scanned height
 // and triggers a rescan from the specified height
 func (m *Manager) RescanFromHeight(height uint64) error {
@@ -130,22 +113,6 @@ func (m *Manager) RescanFromHeight(height uint64) error {
 
 	fmt.Printf("[RescanFromHeight] Successfully reset scan height to %d\n", height)
 	return nil
-}
-
-// ForceRescanFromTip performs a complete rescan from the current chain tip, clearing existing UTXOs
-func (m *Manager) ForceRescanFromTip() error {
-	if m.scanner == nil {
-		return fmt.Errorf("scanner not initialized")
-	}
-
-	// Get current chain tip
-	chainTip, err := m.scanner.Client.GetChainTip()
-	if err != nil {
-		return fmt.Errorf("failed to get chain tip: %w", err)
-	}
-
-	fmt.Printf("[ForceRescanFromTip] Force rescanning from chain tip: %d\n", chainTip)
-	return m.ForceRescanFromHeight(chainTip)
 }
 
 // ForceRescanFromHeight performs a complete rescan from the specified height, clearing existing UTXOs

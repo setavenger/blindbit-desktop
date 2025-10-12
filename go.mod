@@ -17,6 +17,8 @@ require (
 	github.com/tyler-smith/go-bip39 v1.1.0
 )
 
+replace github.com/setavenger/blindbit-lib => ../blindbit-lib/
+
 require (
 	fyne.io/systray v1.10.1-0.20231115130155-104f5ef7839e // indirect
 	github.com/aead/siphash v1.0.1 // indirect

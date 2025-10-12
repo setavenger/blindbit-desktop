@@ -36,9 +36,9 @@ func (m *Manager) StartScanning() error {
 // StopScanning stops the scanning process
 func (m *Manager) StopScanning() {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 
 	if m.scanner == nil {
+		m.mu.Unlock()
 		return
 	}
 
@@ -46,7 +46,9 @@ func (m *Manager) StopScanning() {
 	m.scanner.Stop()
 	m.logger.Info().Msg("stop signal sent to scanner")
 
-	// Update UTXOs from scanner after stopping
+	m.mu.Unlock()
+
+	// Update UTXOs from scanner after stopping (without lock)
 	go func() {
 		// Wait a bit for scanner to finish
 		time.Sleep(2 * time.Second)

@@ -133,6 +133,16 @@ func (m *Manager) LoadWallet() error {
 	m.utxos = walletData.UTXOs
 	m.scanHeight = walletData.LastScanHeight
 
+	// Load transaction history
+	if err := m.loadTransactionHistory(); err != nil {
+		m.logger.Error().Err(err).Msg("failed to load transaction history")
+		// Continue without transaction history rather than failing
+	} else {
+		// Auto-reconcile transaction history to fix self transfers and net amounts
+		// Run in background to avoid blocking initialization
+		go m.autoReconcileTransactionHistory()
+	}
+
 	// Setup scanner in background to avoid blocking startup
 	go func() {
 		if err := m.setupScanner(); err != nil {

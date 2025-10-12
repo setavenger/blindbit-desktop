@@ -2,7 +2,6 @@ package gui
 
 import (
 	"fmt"
-	"strconv"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -16,15 +15,22 @@ import (
 
 // TransactionDetailsTab represents the transaction details view
 type TransactionDetailsTab struct {
-	window          fyne.Window
-	walletManager   WalletManager
-	result          *manager.TransactionResult
-	sendTabResetter SendTabResetter // Interface for resetting send tab fields
+	window           fyne.Window
+	walletManager    WalletManager
+	result           *manager.TransactionResult
+	sendTabResetter  SendTabResetter             // Interface for resetting send tab fields
+	historyRefresher TransactionHistoryRefresher // Interface for refreshing transaction history
 }
 
 // WalletManager interface for wallet operations
 type WalletManager interface {
 	BroadcastTransaction(hex string, txInputs []*wire.TxIn) error
+	BroadcastTransactionWithInfo(hex string, txInputs []*wire.TxIn, recipientInfo *manager.RecipientInfo) error
+}
+
+// TransactionHistoryRefresher interface for refreshing transaction history
+type TransactionHistoryRefresher interface {
+	RefreshTransactionHistory()
 }
 
 // SendTabResetter interface for resetting send tab fields
@@ -33,12 +39,13 @@ type SendTabResetter interface {
 }
 
 // NewTransactionDetailsTab creates a new transaction details tab
-func NewTransactionDetailsTab(window fyne.Window, walletManager WalletManager, result *manager.TransactionResult, sendTabResetter SendTabResetter) *TransactionDetailsTab {
+func NewTransactionDetailsTab(window fyne.Window, walletManager WalletManager, result *manager.TransactionResult, sendTabResetter SendTabResetter, historyRefresher TransactionHistoryRefresher) *TransactionDetailsTab {
 	return &TransactionDetailsTab{
-		window:          window,
-		walletManager:   walletManager,
-		result:          result,
-		sendTabResetter: sendTabResetter,
+		window:           window,
+		walletManager:    walletManager,
+		result:           result,
+		sendTabResetter:  sendTabResetter,
+		historyRefresher: historyRefresher,
 	}
 }
 
@@ -226,7 +233,13 @@ func (td *TransactionDetailsTab) broadcastTransaction() {
 		"Are you sure you want to broadcast this transaction to the network?",
 		func(confirmed bool) {
 			if confirmed {
-				err := td.walletManager.BroadcastTransaction(td.result.Hex, td.result.Inputs)
+				// RecipientInfo is required for transaction broadcast
+				if td.result.RecipientInfo == nil {
+					dialog.ShowError(fmt.Errorf("transaction analysis failed: no recipient information available"), td.window)
+					return
+				}
+
+				err := td.walletManager.BroadcastTransactionWithInfo(td.result.Hex, td.result.Inputs, td.result.RecipientInfo)
 				if err != nil {
 					logging.L.Err(err).Msg("failed to broadcast transaction")
 					dialog.ShowError(fmt.Errorf("failed to broadcast transaction: %v", err), td.window)
@@ -241,13 +254,13 @@ func (td *TransactionDetailsTab) broadcastTransaction() {
 				if td.sendTabResetter != nil {
 					td.sendTabResetter.ResetSendTabFields()
 				}
+
+				// Refresh transaction history after successful broadcast
+				if td.historyRefresher != nil {
+					td.historyRefresher.RefreshTransactionHistory()
+				}
 			}
 		}, td.window)
-}
-
-// formatAmount formats amount in sats
-func formatAmount(amount int64) string {
-	return strconv.FormatInt(amount, 10) + " sats"
 }
 
 // createReadOnlyEntry creates a styled read-only entry with proper text color
