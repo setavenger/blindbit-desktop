@@ -4,10 +4,10 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/theme"
-	"fyne.io/fyne/v2/widget"
 	"github.com/rs/zerolog"
 	"github.com/setavenger/blindbit-desktop/internal/gui"
-	"github.com/setavenger/blindbit-desktop/internal/manager"
+
+	// "github.com/setavenger/blindbit-desktop/internal/manager"
 	"github.com/setavenger/blindbit-lib/logging"
 	"github.com/spf13/pflag"
 )
@@ -28,7 +28,6 @@ func init() {
 }
 
 func main() {
-
 	// Create a new Fyne application
 	myApp := app.New()
 
@@ -41,17 +40,17 @@ func main() {
 	mainWindow.CenterOnScreen()
 
 	// Initialize wallet manager
-	walletManager, err := manager.NewManagerWithDataDir(dataDir)
-	if err != nil {
-		logging.L.Err(err).Msg("Failed to initialize wallet manager")
-		// Show error dialog
-		errorDialog := widget.NewModalPopUp(
-			widget.NewLabel("Failed to initialize wallet manager: "+err.Error()),
-			mainWindow.Canvas(),
-		)
-		errorDialog.Resize(fyne.NewSize(400, 100))
-		errorDialog.Show()
-	}
+	// walletManager, err := manager.NewManagerWithDataDir(dataDir)
+	// if err != nil {
+	// 	logging.L.Err(err).Msg("Failed to initialize wallet manager")
+	// 	// Show error dialog
+	// 	errorDialog := widget.NewModalPopUp(
+	// 		widget.NewLabel("Failed to initialize wallet manager: "+err.Error()),
+	// 		mainWindow.Canvas(),
+	// 	)
+	// 	errorDialog.Resize(fyne.NewSize(400, 100))
+	// 	errorDialog.Show()
+	// }
 
 	// Create the main GUI
 	mainGUI := gui.NewMainGUI(myApp, mainWindow, walletManager)
