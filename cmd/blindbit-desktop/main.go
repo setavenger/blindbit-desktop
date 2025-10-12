@@ -5,7 +5,6 @@ import (
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/theme"
 	"github.com/rs/zerolog"
-	"github.com/setavenger/blindbit-desktop/internal/gui"
 
 	// "github.com/setavenger/blindbit-desktop/internal/manager"
 	"github.com/setavenger/blindbit-lib/logging"
@@ -39,6 +38,8 @@ func main() {
 	mainWindow.Resize(fyne.NewSize(800, 600))
 	mainWindow.CenterOnScreen()
 
+	// manager := controller.NewManager()
+
 	// Initialize wallet manager
 	// walletManager, err := manager.NewManagerWithDataDir(dataDir)
 	// if err != nil {
@@ -53,15 +54,15 @@ func main() {
 	// }
 
 	// Create the main GUI
-	mainGUI := gui.NewMainGUI(myApp, mainWindow, walletManager)
+	// mainGUI := gui.NewMainGUI(myApp, mainWindow, manager)
 
 	// Set the main content
-	mainWindow.SetContent(mainGUI.GetContent())
+	// mainWindow.SetContent(mainGUI.GetContent())
 
 	// Set up cleanup when window is closed
-	mainWindow.SetOnClosed(func() {
-		mainGUI.Cleanup()
-	})
+	// mainWindow.SetOnClosed(func() {
+	// 	mainGUI.Cleanup()
+	// })
 
 	// Show and run the application
 	mainWindow.ShowAndRun()

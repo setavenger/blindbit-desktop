@@ -2,26 +2,29 @@
 package controller
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"os"
 
 	"github.com/setavenger/blindbit-desktop/internal/configs"
-	"github.com/setavenger/blindbit-desktop/internal/storage"
 	"github.com/setavenger/blindbit-lib/logging"
+	"github.com/setavenger/blindbit-lib/networking/v2connect"
 	"github.com/setavenger/blindbit-lib/scanning/scannerv2"
-	"github.com/setavenger/blindbit-lib/utils"
 	"github.com/setavenger/blindbit-lib/wallet"
+	"github.com/setavenger/go-bip352"
 )
 
 type Manager struct {
 	Wallet          *wallet.Wallet `json:"wallet_data"`
 	DataDir         string         `json:"-"`
 	BirthHeight     int            `json:"birth_height"`
-	DustLimit       int
-	LabelCount      int // should always be 0
-	MinChangeAmount uint64
-	OracleAddress   string // for now only gRPC possible will need a flag and options in future
+	DustLimit       int            `json:"dust_limit"`
+	LabelCount      int            `json:"label_count"` // should always be 0
+	MinChangeAmount uint64         `json:"min_change_amount"`
+	OracleAddress   string         `json:"oracle_address"` // for now only gRPC possible will need a flag and options in future
+
+	TransactionHistory []TxHistoryItem `json:"transaction_history"`
 
 	// Scanner stufff
 	Scanner *scannerv2.ScannerV2
@@ -39,28 +42,31 @@ func NewManager() *Manager {
 	}
 }
 
-// NewManagerWithDataDir creates a new wallet manager using the provided data directory.
-// If dataDir is empty, it falls back to the default returned by getDataDir().
-func NewManagerWithDataDir(dataDir string) (*Manager, error) {
-	if dataDir == "" {
-		dataDir = configs.DefaultDataDir()
-	} else {
-		dataDir = utils.ResolvePath(dataDir)
+func (m *Manager) ConstructScanner(ctx context.Context) error {
+	if m.OracleAddress == "" {
+		return errors.New("address is empty string")
 	}
-
-	// Ensure data directory exists
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		fmt.Printf("Error creating data directory: %v\n", err)
-		return nil, fmt.Errorf("failed to create data directory: %w", err)
-	}
-
-	manager, err := storage.LoadPlain(dataDir)
+	oracleClient, err := v2connect.NewClient(ctx, m.OracleAddress)
 	if err != nil {
-		logging.L.Err(err).Msg("failed to load manager")
-		return nil, err
+		logging.L.Err(err).
+			Str("address", m.OracleAddress).
+			Msg("failed to constuct scanner")
+		return err
 	}
 
-	return manager, nil
+	// we only use change labels for now
+	labels := []*bip352.Label{m.Wallet.GetLabel(0)}
+
+	scanner := scannerv2.NewScannerV2(
+		oracleClient,
+		m.Wallet.SecretKeyScan,
+		m.Wallet.PubKeySpend,
+		labels,
+	)
+
+	m.Scanner = scanner
+
+	return nil
 }
 
 /* DB preparations */
