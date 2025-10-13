@@ -38,7 +38,7 @@ func NewManager() *Manager {
 		// LabelCount:      0,                    // default
 		MinChangeAmount: configs.DefaultMinimumAmount, // default
 		// OracleAddress:   "",
-		Scanner: &scannerv2.ScannerV2{},
+		Scanner: nil, // Don't initialize scanner until needed
 	}
 }
 
@@ -86,3 +86,22 @@ func (m *Manager) DeSerialise(data []byte) error {
 }
 
 /* Scanner stuff */
+
+// GetBalance returns the total balance of all UTXOs
+func (m *Manager) GetBalance() uint64 {
+	var total uint64
+	for _, utxo := range m.Wallet.GetUTXOs() {
+		total += utxo.Amount
+	}
+	return total
+}
+
+// GetCurrentHeight queries the oracle for the current blockchain height
+func (m *Manager) GetCurrentHeight() (uint32, error) {
+	if m.Scanner == nil {
+		return 0, errors.New("scanner not initialized")
+	}
+	// TODO: Implement oracle height query
+	// This would typically call the oracle client to get the current tip height
+	return 0, errors.New("not implemented")
+}

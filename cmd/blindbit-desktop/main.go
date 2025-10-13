@@ -1,12 +1,17 @@
 package main
 
 import (
+	"fmt"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"github.com/rs/zerolog"
 
-	// "github.com/setavenger/blindbit-desktop/internal/manager"
+	"github.com/setavenger/blindbit-desktop/internal/controller"
+	"github.com/setavenger/blindbit-desktop/internal/gui"
+	"github.com/setavenger/blindbit-desktop/internal/setup"
 	"github.com/setavenger/blindbit-lib/logging"
 	"github.com/spf13/pflag"
 )
@@ -38,31 +43,28 @@ func main() {
 	mainWindow.Resize(fyne.NewSize(800, 600))
 	mainWindow.CenterOnScreen()
 
-	// manager := controller.NewManager()
+	// Try to load existing wallet manager
+	walletManager, exists, err := setup.NewManagerWithDataDir(dataDir)
+	if err != nil {
+		logging.L.Err(err).Msg("Failed to load existing wallet manager")
+		// Show error dialog and exit
+		dialog.ShowError(fmt.Errorf("failed to load wallet: %v", err), mainWindow)
+		return
+	}
 
-	// Initialize wallet manager
-	// walletManager, err := manager.NewManagerWithDataDir(dataDir)
-	// if err != nil {
-	// 	logging.L.Err(err).Msg("Failed to initialize wallet manager")
-	// 	// Show error dialog
-	// 	errorDialog := widget.NewModalPopUp(
-	// 		widget.NewLabel("Failed to initialize wallet manager: "+err.Error()),
-	// 		mainWindow.Canvas(),
-	// 	)
-	// 	errorDialog.Resize(fyne.NewSize(400, 100))
-	// 	errorDialog.Show()
-	// }
-
-	// Create the main GUI
-	// mainGUI := gui.NewMainGUI(myApp, mainWindow, manager)
-
-	// Set the main content
-	// mainWindow.SetContent(mainGUI.GetContent())
-
-	// Set up cleanup when window is closed
-	// mainWindow.SetOnClosed(func() {
-	// 	mainGUI.Cleanup()
-	// })
+	if !exists {
+		// No wallet exists, show setup wizard
+		setupWizard := gui.NewSetupWizard(myApp, mainWindow, dataDir, func(manager *controller.Manager) {
+			// Setup completed, show main GUI
+			mainGUI := gui.NewMainGUI(myApp, mainWindow, manager)
+			mainWindow.SetContent(mainGUI.GetContent())
+		})
+		setupWizard.Show()
+	} else {
+		// Wallet loaded successfully, show main GUI
+		mainGUI := gui.NewMainGUI(myApp, mainWindow, walletManager)
+		mainWindow.SetContent(mainGUI.GetContent())
+	}
 
 	// Show and run the application
 	mainWindow.ShowAndRun()

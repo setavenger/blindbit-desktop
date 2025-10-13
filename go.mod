@@ -5,12 +5,12 @@ go 1.24.1
 require (
 	fyne.io/fyne/v2 v2.4.4
 	github.com/rs/zerolog v1.34.0
-	github.com/setavenger/blindbit-lib v0.0.2-0.20251001205222-be29fa8c9321
+	github.com/setavenger/blindbit-lib v0.0.2-0.20251012143314-3e9cc103e56f
 	github.com/setavenger/go-bip352 v0.1.9-0.20250919170152-7683068d2f35
 	github.com/spf13/pflag v1.0.5
 )
 
-replace github.com/setavenger/blindbit-lib => ../blindbit-lib/
+// replace github.com/setavenger/blindbit-lib => ../blindbit-lib/
 
 require (
 	fyne.io/systray v1.10.1-0.20231115130155-104f5ef7839e // indirect
