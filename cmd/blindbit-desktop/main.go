@@ -9,10 +9,12 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"github.com/rs/zerolog"
 
+	"github.com/setavenger/blindbit-desktop/internal/configs"
 	"github.com/setavenger/blindbit-desktop/internal/controller"
 	"github.com/setavenger/blindbit-desktop/internal/gui"
 	"github.com/setavenger/blindbit-desktop/internal/setup"
 	"github.com/setavenger/blindbit-lib/logging"
+	"github.com/setavenger/blindbit-lib/utils"
 	"github.com/spf13/pflag"
 )
 
@@ -52,9 +54,17 @@ func main() {
 		return
 	}
 
+	// Get the resolved data directory for consistency
+	resolvedDataDir := dataDir
+	if resolvedDataDir == "" {
+		resolvedDataDir = configs.DefaultDataDir()
+	} else {
+		resolvedDataDir = utils.ResolvePath(resolvedDataDir)
+	}
+
 	if !exists {
 		// No wallet exists, show setup wizard
-		setupWizard := gui.NewSetupWizard(myApp, mainWindow, dataDir, func(manager *controller.Manager) {
+		setupWizard := gui.NewSetupWizard(myApp, mainWindow, resolvedDataDir, func(manager *controller.Manager) {
 			// Setup completed, show main GUI
 			mainGUI := gui.NewMainGUI(myApp, mainWindow, manager)
 			mainWindow.SetContent(mainGUI.GetContent())

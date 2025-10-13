@@ -7,10 +7,11 @@ require (
 	github.com/rs/zerolog v1.34.0
 	github.com/setavenger/blindbit-lib v0.0.2-0.20251012143314-3e9cc103e56f
 	github.com/setavenger/go-bip352 v0.1.9-0.20250919170152-7683068d2f35
+	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/spf13/pflag v1.0.5
 )
 
-// replace github.com/setavenger/blindbit-lib => ../blindbit-lib/
+replace github.com/setavenger/blindbit-lib => ../blindbit-lib/
 
 require (
 	fyne.io/systray v1.10.1-0.20231115130155-104f5ef7839e // indirect

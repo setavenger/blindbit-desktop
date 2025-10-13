@@ -13,42 +13,51 @@ import (
 const walletDataFilename = "wallet.dat"
 
 func SavePlain(datadir string, m *controller.Manager) error {
-	fmt.Printf("SavePlain called with datadir: %s\n", datadir)
-	
+	logging.L.Trace().Str("datadir", datadir).Msg("saving wallet")
 	binaryData, err := m.Serialise()
 	if err != nil {
-		logging.L.Err(err).Msg("failed to serialise wallet data")
+		logging.L.Err(err).
+			Str("datadir", datadir).
+			Msg("failed to serialise wallet data")
 		return err
 	}
-	fmt.Printf("Serialized data length: %d bytes\n", len(binaryData))
 
 	// Write to file
 	walletPath := filepath.Join(datadir, walletDataFilename)
-	fmt.Printf("Writing to file: %s\n", walletPath)
-	
+
 	if err := os.WriteFile(walletPath, binaryData, 0600); err != nil {
-		fmt.Printf("WriteFile error: %v\n", err)
+		logging.L.Err(err).
+			Str("datadir", datadir).
+			Str("path", walletPath).
+			Msg("failed to write wallet file")
 		return fmt.Errorf("failed to write wallet file: %w", err)
 	}
-	
-	fmt.Printf("Successfully wrote wallet file\n")
+
+	logging.L.Info().Str("path", walletPath).Msg("successfully wrote wallet file")
 	return nil
 }
 
 func LoadPlain(datadir string) (m *controller.Manager, err error) {
-
+	logging.L.Trace().Str("datadir", datadir).Msg("loading wallet")
 	data, err := os.ReadFile(filepath.Join(datadir, walletDataFilename))
 	if err != nil {
-		logging.L.Err(err).Msg("failed to load wallet file")
+		logging.L.Err(err).
+			Str("datadir", datadir).
+			Str("path", filepath.Join(datadir, walletDataFilename)).
+			Msg("failed to load wallet file")
 		return nil, err
 	}
 
 	m = new(controller.Manager)
 	err = m.DeSerialise(data)
 	if err != nil {
-		logging.L.Err(err).Msg("failed to deserialise wallet data")
+		logging.L.Err(err).
+			Str("datadir", datadir).
+			Str("path", filepath.Join(datadir, walletDataFilename)).
+			Msg("failed to deserialise wallet data")
 		return nil, err
 	}
 
+	logging.L.Info().Str("datadir", datadir).Msg("successfully loaded wallet")
 	return m, err
 }

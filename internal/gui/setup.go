@@ -15,6 +15,7 @@ import (
 	"github.com/setavenger/blindbit-desktop/internal/storage"
 	"github.com/setavenger/blindbit-lib/logging"
 	"github.com/setavenger/blindbit-lib/types"
+	"github.com/setavenger/blindbit-lib/wallet"
 )
 
 type SetupWizard struct {
@@ -71,16 +72,33 @@ You can either:
 }
 
 func (s *SetupWizard) showWalletTypeDialog() {
-	// For now, we'll assume we need to add wallet creation functions to blindbit-lib
-	// This is a placeholder that will need to be implemented once we know the API
+	// Generate a new mnemonic
+	mnemonic, err := wallet.GenerateMnemonic()
+	if err != nil {
+		dialog.ShowError(fmt.Errorf("failed to generate mnemonic: %v", err), s.window)
+		return
+	}
 
-	infoText := widget.NewLabel("Wallet creation functionality needs to be implemented in blindbit-lib.\n\nThis would typically involve:\n- Generating a new mnemonic\n- Creating wallet from mnemonic\n- Setting up network and birth height")
+	// Display the generated mnemonic for the user to save
+	mnemonicText := widget.NewRichTextFromMarkdown(fmt.Sprintf(`
+# Your New Wallet Seed Phrase
 
-	okBtn := widget.NewButton("OK", func() {
-		// For now, create a basic manager and let user configure it
-		manager := controller.NewManager()
-		manager.DataDir = s.dataDir
-		s.showConfigurationDialog(manager)
+**IMPORTANT**: Write down these 24 words in the exact order shown below. 
+This is your only way to recover your wallet if you lose access to this device.
+
+**Store them safely and never share them with anyone!**
+
+## Your Seed Phrase:
+
+%s
+
+**Please confirm that you have written down these words before continuing.**
+`, mnemonic))
+
+	mnemonicText.Wrapping = fyne.TextWrapWord
+
+	confirmBtn := widget.NewButton("I Have Written Down My Seed Phrase", func() {
+		s.showMnemonicConfirmation(mnemonic)
 	})
 
 	backBtn := widget.NewButton("Back", func() {
@@ -88,14 +106,55 @@ func (s *SetupWizard) showWalletTypeDialog() {
 	})
 
 	content := container.NewVBox(
-		infoText,
+		mnemonicText,
 		widget.NewSeparator(),
-		container.NewHBox(backBtn, okBtn),
+		container.NewHBox(backBtn, confirmBtn),
 	)
 
 	// Set the window content directly
 	s.window.SetContent(content)
-	s.window.Resize(fyne.NewSize(500, 300))
+	s.window.Resize(fyne.NewSize(600, 500))
+}
+
+func (s *SetupWizard) showMnemonicConfirmation(mnemonic string) {
+	// Ask user to confirm they've written down the mnemonic
+	confirmText := widget.NewRichTextFromMarkdown(`
+# Confirm Your Seed Phrase
+
+To ensure you have written down your seed phrase correctly, please enter it below.
+
+**This is your last chance to verify you have saved your seed phrase!**
+`)
+
+	mnemonicEntry := widget.NewMultiLineEntry()
+	mnemonicEntry.SetPlaceHolder("Enter your 24-word seed phrase here to confirm...")
+	mnemonicEntry.Resize(fyne.NewSize(450, 120))
+
+	confirmBtn := widget.NewButton("Confirm Seed Phrase", func() {
+		enteredMnemonic := strings.TrimSpace(mnemonicEntry.Text)
+		if enteredMnemonic == mnemonic {
+			// Mnemonic matches, proceed to configuration
+			s.createWalletFromMnemonic(mnemonic)
+		} else {
+			dialog.ShowError(fmt.Errorf("seed phrase does not match. Please try again."), s.window)
+		}
+	})
+
+	backBtn := widget.NewButton("Back", func() {
+		s.showWalletTypeDialog()
+	})
+
+	content := container.NewVBox(
+		confirmText,
+		widget.NewSeparator(),
+		mnemonicEntry,
+		widget.NewSeparator(),
+		container.NewHBox(backBtn, confirmBtn),
+	)
+
+	// Set the window content directly
+	s.window.SetContent(content)
+	s.window.Resize(fyne.NewSize(600, 500))
 }
 
 func (s *SetupWizard) showImportDialog() {
@@ -106,10 +165,7 @@ func (s *SetupWizard) showImportDialog() {
 	importBtn := widget.NewButton("Import Wallet", func() {
 		mnemonic := strings.TrimSpace(mnemonicEntry.Text)
 		if s.validateMnemonic(mnemonic) {
-			manager := controller.NewManager()
-			manager.DataDir = s.dataDir
-			// TODO: Import wallet from mnemonic using blindbit-lib
-			s.showConfigurationDialog(manager)
+			s.createWalletFromMnemonic(mnemonic)
 		} else {
 			dialog.ShowError(fmt.Errorf("invalid mnemonic"), s.window)
 		}
@@ -128,7 +184,24 @@ func (s *SetupWizard) showImportDialog() {
 
 	// Set the window content directly
 	s.window.SetContent(content)
-	s.window.Resize(fyne.NewSize(500, 400))
+	s.window.Resize(fyne.NewSize(600, 500))
+}
+
+func (s *SetupWizard) createWalletFromMnemonic(mnemonic string) {
+	// Create wallet from mnemonic (default to testnet for now, will be configurable)
+	walletInstance, err := wallet.NewFromMnemonic(mnemonic, types.NetworkTestnet)
+	if err != nil {
+		dialog.ShowError(fmt.Errorf("failed to create wallet from mnemonic: %v", err), s.window)
+		return
+	}
+
+	// Create manager with the wallet
+	manager := controller.NewManager()
+	manager.Wallet = walletInstance
+	manager.DataDir = s.dataDir
+
+	// Show configuration dialog
+	s.showConfigurationDialog(manager)
 }
 
 func (s *SetupWizard) showConfigurationDialog(manager *controller.Manager) {
@@ -189,7 +262,9 @@ func (s *SetupWizard) showConfigurationDialog(manager *controller.Manager) {
 
 		// Save the manager
 		if err := storage.SavePlain(s.dataDir, manager); err != nil {
-			logging.L.Err(err).Msg("failed to save wallet")
+			logging.L.Err(err).
+				Str("datadir", s.dataDir).
+				Msg("failed to save wallet")
 			dialog.ShowError(fmt.Errorf("failed to save wallet: %v", err), s.window)
 			return
 		}

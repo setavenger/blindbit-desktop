@@ -16,9 +16,7 @@ func (m *Manager) GetNetwork() types.Network {
 // GetSilentPaymentAddress returns the main Silent Payment address
 // Note: This is NOT the change address (label 0), but the main receiving address
 func (m *Manager) GetSilentPaymentAddress() string {
-	// TODO: Implement getting the main SP address from wallet
-	// This would typically involve getting the address without any label
-	return "sp1..." // Placeholder
+	return m.Wallet.Address()
 }
 
 // GetUTXOsSorted returns UTXOs sorted by block height (newest first)
