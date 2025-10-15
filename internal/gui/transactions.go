@@ -3,6 +3,7 @@ package gui
 import (
 	"encoding/hex"
 	"fmt"
+	"sort"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -13,62 +14,71 @@ import (
 )
 
 func (g *MainGUI) createTransactionsTab() fyne.CanvasObject {
-	// Transaction list
-	txList := widget.NewList(
-		func() int {
-			return len(g.manager.TransactionHistory)
+	// Create table with headers
+	table := widget.NewTable(
+		func() (int, int) {
+			return len(g.manager.TransactionHistory) + 1, 4 // +1 for header row
 		},
 		func() fyne.CanvasObject {
-			return container.NewHBox(
-				widget.NewLabel("TXID"),
-				widget.NewLabel("Block Height"),
-				widget.NewLabel("Net Amount"),
-				widget.NewLabel("Status"),
-			)
+			return widget.NewLabel("")
 		},
-		func(id widget.ListItemID, obj fyne.CanvasObject) {
-			history := g.manager.TransactionHistory
-			if id < len(history) {
-				tx := history[id]
-				container := obj.(*fyne.Container)
+		func(id widget.TableCellID, obj fyne.CanvasObject) {
+			label := obj.(*widget.Label)
 
-				// Update the labels with transaction data
-				txidLabel := container.Objects[0].(*widget.Label)
-				heightLabel := container.Objects[1].(*widget.Label)
-				amountLabel := container.Objects[2].(*widget.Label)
-				statusLabel := container.Objects[3].(*widget.Label)
-
-				// Truncate TXID for display
-				txidHex := hex.EncodeToString(tx.TxID[:])
-				txidLabel.SetText(fmt.Sprintf("%.8s...", txidHex))
-
-				heightLabel.SetText(fmt.Sprintf("%d", tx.BlockHeight))
-
-				// Format amount with sign
-				var amountText string
-				if tx.NetAmount > 0 {
-					amountText = fmt.Sprintf("+%d sats", tx.NetAmount)
-				} else {
-					amountText = fmt.Sprintf("%d sats", tx.NetAmount)
+			if id.Row == 0 {
+				// Header row
+				switch id.Col {
+				case 0:
+					label.SetText("TXID")
+				case 1:
+					label.SetText("Block Height")
+				case 2:
+					label.SetText("Net Amount")
+				case 3:
+					label.SetText("Status")
 				}
-				amountLabel.SetText(amountText)
+				label.TextStyle.Bold = true
+			} else {
+				// Data rows
+				history := g.manager.TransactionHistory
+				if id.Row-1 < len(history) {
+					tx := history[id.Row-1]
 
-				// Determine status
-				var status string
-				if tx.BlockHeight > 0 {
-					status = "Confirmed"
-				} else {
-					status = "Unconfirmed"
+					switch id.Col {
+					case 0:
+						// Truncate TXID for display
+						txidHex := hex.EncodeToString(tx.TxID[:])
+						label.SetText(fmt.Sprintf("%.8s...", txidHex))
+					case 1:
+						label.SetText(fmt.Sprintf("%d", tx.BlockHeight))
+					case 2:
+						// Format amount with sign
+						var amountText string
+						if tx.NetAmount > 0 {
+							amountText = fmt.Sprintf("+%d sats", tx.NetAmount)
+						} else {
+							amountText = fmt.Sprintf("%d sats", tx.NetAmount)
+						}
+						label.SetText(amountText)
+					case 3:
+						// Determine status
+						var status string
+						if tx.BlockHeight > 0 {
+							status = "Confirmed"
+						} else {
+							status = "Unconfirmed"
+						}
+						label.SetText(status)
+					}
 				}
-				statusLabel.SetText(status)
 			}
 		},
 	)
 
 	// Set up click handler for transaction details
-	txList.OnSelected = func(id widget.ListItemID) {
-		if id < len(g.manager.TransactionHistory) {
-			tx := g.manager.TransactionHistory[id]
+	table.OnSelected = func(id widget.TableCellID) {
+		if id.Row > 0 && id.Row-1 < len(g.manager.TransactionHistory) {
+			tx := g.manager.TransactionHistory[id.Row-1]
 			g.showTransactionHistoryDetails(tx)
 		}
 	}
@@ -98,7 +108,7 @@ Click on a transaction to view details.
 		widget.NewSeparator(),
 		controlPanel,
 		widget.NewSeparator(),
-		txList,
+		table,
 	)
 
 	return content
@@ -113,6 +123,8 @@ Transaction Details:
 Transaction ID: %s
 Block Height: %d
 Net Amount: %d sats
+Fee: %d sats
+Fee Rate: %d sat/vB
 Status: %s
 
 Click "View in Explorer" to see this transaction on mempool.space
@@ -120,6 +132,8 @@ Click "View in Explorer" to see this transaction on mempool.space
 		txidHex,
 		tx.BlockHeight,
 		tx.NetAmount,
+		tx.Fee,
+		tx.FeeRate,
 		func() string {
 			if tx.BlockHeight > 0 {
 				return "Confirmed"
@@ -153,8 +167,14 @@ Click "View in Explorer" to see this transaction on mempool.space
 }
 
 func (g *MainGUI) refreshTransactions() {
-	// Refresh the transaction list
-	// This would typically trigger a UI refresh
+	// Sync receive transactions from UTXOs
+	g.manager.SyncReceiveTransactions()
+
+	// Sort by block height descending (newest first)
+	sort.Slice(g.manager.TransactionHistory, func(i, j int) bool {
+		return g.manager.TransactionHistory[i].BlockHeight > g.manager.TransactionHistory[j].BlockHeight
+	})
+
 	fmt.Println("Refreshing transaction history")
 }
 

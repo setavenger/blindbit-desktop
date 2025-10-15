@@ -1,7 +1,9 @@
 package gui
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -10,6 +12,9 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/setavenger/blindbit-desktop/internal/controller"
+	"github.com/setavenger/blindbit-lib/logging"
+	"github.com/setavenger/blindbit-lib/utils"
 	"github.com/setavenger/blindbit-lib/wallet"
 )
 
@@ -30,15 +35,15 @@ func (g *MainGUI) createSendTab() fyne.CanvasObject {
 	feeRateLabel := widget.NewLabel("Fee Rate (sat/vB):")
 
 	// Preview button
-	previewBtn := widget.NewButton("Preview Transaction", func() {
+	previewBtn := widget.NewButton("Send Transaction", func() {
 		g.previewTransaction(recipientEntry.Text, amountEntry.Text, feeRateEntry.Text)
 	})
 
 	// Send button (initially disabled)
-	sendBtn := widget.NewButton("Send Transaction", func() {
-		g.sendTransaction(recipientEntry.Text, amountEntry.Text, feeRateEntry.Text)
-	})
-	sendBtn.Disable()
+	// sendBtn := widget.NewButton("Send Transaction", func() {
+	// 	g.sendTransaction(recipientEntry.Text, amountEntry.Text, feeRateEntry.Text)
+	// })
+	// sendBtn.Disable()
 
 	// Form layout
 	form := container.NewVBox(
@@ -51,7 +56,10 @@ func (g *MainGUI) createSendTab() fyne.CanvasObject {
 		feeRateLabel,
 		feeRateEntry,
 		widget.NewSeparator(),
-		container.NewHBox(previewBtn, sendBtn),
+		container.NewHBox(
+			previewBtn,
+			// sendBtn,
+		),
 	)
 
 	return form
@@ -120,32 +128,97 @@ func (g *MainGUI) showTransactionDetails(
 ) {
 	// Calculate net amount (sum of recipient amounts)
 	var netAmount int64
+	var totalSent uint64
 	for _, recipient := range recipients {
+		totalSent += recipient.GetAmount()
+		if recipient.IsChange() {
+			logging.L.Debug().Msg("change detected")
+			continue
+		}
+		if recipient.GetAddress() == g.manager.GetSilentPaymentAddress() {
+			logging.L.Debug().Msg("self-transfer detected")
+			continue
+		}
 		netAmount += int64(recipient.GetAmount())
 	}
+
+	// Calculate actual fee and fee rate
+	var fee uint64
+	var feeRate uint64
+	var feeRateFloat float64
+	if txMetadata.Tx != nil {
+		// Calculate total output value
+		var outputSum uint64
+		for _, txOut := range txMetadata.Tx.TxOut {
+			outputSum += uint64(txOut.Value)
+		}
+
+		// Calculate total input value from our UTXOs
+		var inputSum uint64
+		for _, txIn := range txMetadata.Tx.TxIn {
+			var foundUtxo bool
+
+			// Find the UTXO being spent
+			for _, utxo := range g.manager.Wallet.GetUTXOs() {
+				txidMatch := bytes.Equal(
+					utils.ReverseBytesCopy(utxo.Txid[:]),
+					txIn.PreviousOutPoint.Hash[:],
+				)
+				if txidMatch && utxo.Vout == txIn.PreviousOutPoint.Index {
+					inputSum += utxo.Amount
+					foundUtxo = true
+					break
+				}
+			}
+			if foundUtxo {
+				continue
+			}
+
+			// we should never get here as we should have found the UTXO
+			err := errors.New("input utxo not found")
+			logging.L.Err(err).Str("input", txIn.PreviousOutPoint.String()).Msg("UTXO not found")
+			return
+		}
+
+		logging.L.Info().Uint64("inputSum", inputSum).Uint64("outputSum", outputSum).Msg("input and output sums")
+		// Calculate actual fee: inputs - outputs
+		fee = controller.CalculateTxFee(inputSum, outputSum)
+
+		// Calculate vbytes and fee rate
+		vbytes := controller.CalculateTxVBytes(txMetadata.Tx)
+		feeRateFloat = controller.CalculateFeeRate(fee, vbytes)
+		feeRate = uint64(feeRateFloat)
+	}
+	logging.L.Info().
+		Int64("netAmount", netAmount).
+		Uint64("totalSent", totalSent).
+		Uint64("fee", fee).
+		Uint64("feeRate", feeRate).
+		Msg("transaction details")
 
 	detailsText := fmt.Sprintf(`
 Transaction Details:
 
 Recipients: %d
 Net Amount: %d sats
-Fee: %d sats (estimated)
+Fee: %d sats
+Fee Rate: %.2f sat/vB
 Total: %d sats
 
 Transaction prepared successfully
 `,
 		len(recipients),
 		netAmount,
-		// TODO: Calculate actual fee from transaction
-		0,
-		netAmount,
+		fee,
+		feeRateFloat,
+		int64(totalSent),
 	)
 
 	detailsLabel := widget.NewLabel(detailsText)
 	detailsLabel.Wrapping = fyne.TextWrapWord
 
 	confirmBtn := widget.NewButton("Confirm & Broadcast", func() {
-		g.broadcastTransaction(txMetadata, netAmount)
+		g.broadcastTransaction(txMetadata, recipients)
 	})
 
 	cancelBtn := widget.NewButton("Cancel", func() {
@@ -161,13 +234,19 @@ Transaction prepared successfully
 	dialog.ShowCustom("Transaction Preview", "Close", content, g.window)
 }
 
-func (g *MainGUI) broadcastTransaction(txMetadata *wallet.TxMetadata, netAmount int64) {
+func (g *MainGUI) broadcastTransaction(
+	txMetadata *wallet.TxMetadata,
+	recipients []wallet.Recipient,
+) {
 	// Serialize transaction to hex
 	var txHex string
 	if txMetadata.Tx != nil {
-		// TODO: Serialize the wire.MsgTx to hex
-		// For now, show placeholder
-		txHex = "placeholder_hex"
+		var err error
+		txHex, err = controller.SerializeTx(txMetadata.Tx)
+		if err != nil {
+			dialog.ShowError(fmt.Errorf("failed to serialize transaction: %v", err), g.window)
+			return
+		}
 	} else {
 		dialog.ShowError(fmt.Errorf("no transaction to broadcast"), g.window)
 		return
@@ -180,11 +259,14 @@ func (g *MainGUI) broadcastTransaction(txMetadata *wallet.TxMetadata, netAmount 
 		return
 	}
 
-	// Add to history
-	// TODO: Get actual transaction ID from the transaction
-	// For now, create a placeholder
-	var txid [32]byte
-	g.manager.AddToHistory(txid, int(netAmount), 0) // Block height 0 for unconfirmed
+	// todo:mark inputs as spent
+
+	// Record transaction to history
+	err = g.manager.RecordSentTransaction(txMetadata, recipients)
+	if err != nil {
+		dialog.ShowError(fmt.Errorf("failed to record transaction: %v", err), g.window)
+		return
+	}
 
 	// Show success message
 	dialog.ShowInformation("Success", "Transaction broadcast successfully!", g.window)
@@ -193,6 +275,7 @@ func (g *MainGUI) broadcastTransaction(txMetadata *wallet.TxMetadata, netAmount 
 }
 
 func (g *MainGUI) sendTransaction(recipient, amountStr, feeRateStr string) {
+	// todo: this can probably be removed as it's redundant?
 	// This would be called after preview and confirmation
 	// For now, just show a message
 	dialog.ShowInformation("Send", "Send functionality will be implemented after transaction preview", g.window)
