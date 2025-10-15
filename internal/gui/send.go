@@ -23,7 +23,6 @@ func (g *MainGUI) createSendTab() fyne.CanvasObject {
 
 	feeRateEntry := widget.NewEntry()
 	feeRateEntry.SetPlaceHolder("Fee rate in sat/vB (e.g., 10)")
-	feeRateEntry.SetText("10") // Default fee rate
 
 	// Labels
 	recipientLabel := widget.NewLabel("Recipient Address:")
@@ -115,7 +114,10 @@ func (g *MainGUI) previewTransaction(recipient, amountStr, feeRateStr string) {
 	g.showTransactionDetails(txMetadata, recipients)
 }
 
-func (g *MainGUI) showTransactionDetails(txMetadata *wallet.TxMetadata, recipients []wallet.Recipient) {
+func (g *MainGUI) showTransactionDetails(
+	txMetadata *wallet.TxMetadata,
+	recipients []wallet.Recipient,
+) {
 	// Calculate net amount (sum of recipient amounts)
 	var netAmount int64
 	for _, recipient := range recipients {

@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -136,7 +137,8 @@ To ensure you have written down your seed phrase correctly, please enter it belo
 			// Mnemonic matches, proceed to configuration
 			s.createWalletFromMnemonic(mnemonic)
 		} else {
-			dialog.ShowError(fmt.Errorf("seed phrase does not match. Please try again."), s.window)
+			err := errors.New("seed phrase does not match. Please try again")
+			dialog.ShowError(err, s.window)
 		}
 	})
 
@@ -188,8 +190,8 @@ func (s *SetupWizard) showImportDialog() {
 }
 
 func (s *SetupWizard) createWalletFromMnemonic(mnemonic string) {
-	// Create wallet from mnemonic (default to testnet for now, will be configurable)
-	walletInstance, err := wallet.NewFromMnemonic(mnemonic, types.NetworkTestnet)
+	// Create wallet from mnemonic (default to signet for now, will be configurable)
+	walletInstance, err := wallet.NewFromMnemonic(mnemonic, types.NetworkSignet)
 	if err != nil {
 		dialog.ShowError(fmt.Errorf("failed to create wallet from mnemonic: %v", err), s.window)
 		return
@@ -217,7 +219,7 @@ func (s *SetupWizard) showConfigurationDialog(manager *controller.Manager) {
 			manager.Wallet.Network = types.NetworkSignet
 		}
 	})
-	networkRadio.SetSelected("testnet") // Default to testnet
+	networkRadio.SetSelected("signet") // Default to signet
 
 	// Birth height
 	birthHeightEntry := widget.NewEntry()

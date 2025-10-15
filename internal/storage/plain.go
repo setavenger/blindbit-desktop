@@ -8,6 +8,7 @@ import (
 
 	"github.com/setavenger/blindbit-desktop/internal/controller"
 	"github.com/setavenger/blindbit-lib/logging"
+	"github.com/setavenger/blindbit-lib/wallet"
 )
 
 const walletDataFilename = "wallet.dat"
@@ -49,6 +50,7 @@ func LoadPlain(datadir string) (m *controller.Manager, err error) {
 	}
 
 	m = new(controller.Manager)
+	m.Wallet = wallet.InitWallet()
 	err = m.DeSerialise(data)
 	if err != nil {
 		logging.L.Err(err).

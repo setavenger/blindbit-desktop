@@ -1,18 +1,19 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/theme"
 	"github.com/rs/zerolog"
 
 	"github.com/setavenger/blindbit-desktop/internal/configs"
 	"github.com/setavenger/blindbit-desktop/internal/controller"
 	"github.com/setavenger/blindbit-desktop/internal/gui"
 	"github.com/setavenger/blindbit-desktop/internal/setup"
+	"github.com/setavenger/blindbit-desktop/internal/storage"
 	"github.com/setavenger/blindbit-lib/logging"
 	"github.com/setavenger/blindbit-lib/utils"
 	"github.com/spf13/pflag"
@@ -27,7 +28,7 @@ func init() {
 	pflag.Parse()
 
 	if debug {
-		logging.SetLogLevel(zerolog.DebugLevel)
+		logging.SetLogLevel(zerolog.TraceLevel)
 	} else {
 		logging.SetLogLevel(zerolog.InfoLevel)
 	}
@@ -37,7 +38,7 @@ func main() {
 	// Create a new Fyne application
 	myApp := app.New()
 
-	myApp.SetIcon(theme.AccountIcon()) // You can replace this with a custom icon
+	myApp.SetIcon(myApp.Icon()) // You can replace this with a custom icon
 
 	// Create the main window
 	mainWindow := myApp.NewWindow("BlindBit Desktop")
@@ -65,12 +66,55 @@ func main() {
 	if !exists {
 		// No wallet exists, show setup wizard
 		setupWizard := gui.NewSetupWizard(myApp, mainWindow, resolvedDataDir, func(manager *controller.Manager) {
+			// Initialize scanner before showing main GUI
+			if err := manager.ConstructScanner(context.TODO()); err != nil {
+				logging.L.Err(err).Msg("failed to construct scanner after setup")
+				dialog.ShowError(fmt.Errorf("failed to construct scanner: %v", err), mainWindow)
+				return
+			}
+
+			// Start channel handling and background scanning
+			manager.StartChannelHandling(context.TODO(), func() error {
+				return storage.SavePlain(manager.DataDir, manager)
+			})
+
+			go func() {
+				if err := manager.Scanner.Watch(context.TODO(), uint32(manager.Wallet.LastScanHeight)); err != nil {
+					logging.L.Err(err).Msg("failed to watch scanner")
+					dialog.ShowError(fmt.Errorf("failed to watch scanner: %v", err), mainWindow)
+					return
+				}
+			}()
+
 			// Setup completed, show main GUI
 			mainGUI := gui.NewMainGUI(myApp, mainWindow, manager)
 			mainWindow.SetContent(mainGUI.GetContent())
 		})
 		setupWizard.Show()
 	} else {
+		// Set the DataDir on the loaded manager
+		walletManager.DataDir = resolvedDataDir
+
+		// Initialize scanner before showing main GUI
+		if err := walletManager.ConstructScanner(context.TODO()); err != nil {
+			logging.L.Err(err).Msg("failed to construct scanner")
+			dialog.ShowError(fmt.Errorf("failed to construct scanner: %v", err), mainWindow)
+			return
+		}
+
+		// Start channel handling and background scanning
+		walletManager.StartChannelHandling(context.TODO(), func() error {
+			return storage.SavePlain(walletManager.DataDir, walletManager)
+		})
+
+		go func() {
+			if err := walletManager.Scanner.Watch(context.TODO(), uint32(walletManager.Wallet.LastScanHeight)); err != nil {
+				logging.L.Err(err).Msg("failed to watch scanner")
+				dialog.ShowError(fmt.Errorf("failed to watch scanner: %v", err), mainWindow)
+				return
+			}
+		}()
+
 		// Wallet loaded successfully, show main GUI
 		mainGUI := gui.NewMainGUI(myApp, mainWindow, walletManager)
 		mainWindow.SetContent(mainGUI.GetContent())

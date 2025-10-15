@@ -23,10 +23,6 @@ func (g *MainGUI) createReceiveTab() fyne.CanvasObject {
 	introText := widget.NewLabel("This is your Silent Payment address. You can share this address with anyone who wants to send you Bitcoin.")
 	introText.Wrapping = fyne.TextWrapWord
 
-	// Important notes section
-	notesTitle := widget.NewLabel("Important Notes:")
-	notesTitle.TextStyle.Bold = true
-
 	// Address section
 	addressTitle := widget.NewLabel("Your Silent Payment Address:")
 	addressTitle.TextStyle.Bold = true
@@ -55,11 +51,6 @@ func (g *MainGUI) createReceiveTab() fyne.CanvasObject {
 	// Generate QR code
 	qrImage := g.generateQRCode(address)
 
-	// Layout the content to match the image
-	notesContainer := container.NewVBox(
-		notesTitle,
-	)
-
 	addressSection := container.NewVBox(
 		addressTitle,
 		addressLabel,
@@ -77,8 +68,6 @@ func (g *MainGUI) createReceiveTab() fyne.CanvasObject {
 		titleLabel,
 		widget.NewSeparator(),
 		introText,
-		widget.NewSeparator(),
-		notesContainer,
 		widget.NewSeparator(),
 		addressSection,
 		widget.NewSeparator(),

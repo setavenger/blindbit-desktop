@@ -30,3 +30,15 @@ func (m *Manager) GetUTXOsSorted() []*wallet.OwnedUTXO {
 
 	return utxos
 }
+
+// GetUnspentUTXOsSorted returns only unspent UTXOs sorted by block height (newest first)
+func (m *Manager) GetUnspentUTXOsSorted() []*wallet.OwnedUTXO {
+	utxos := m.Wallet.GetUTXOs(wallet.StateUnspent)
+
+	// Sort by height in descending order (newest first)
+	sort.Slice(utxos, func(i, j int) bool {
+		return utxos[i].Height > utxos[j].Height
+	})
+
+	return utxos
+}

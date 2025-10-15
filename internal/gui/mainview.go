@@ -26,6 +26,7 @@ func NewMainGUI(app fyne.App, window fyne.Window, manager *controller.Manager) *
 
 func (g *MainGUI) setupTabs() {
 	g.tabs = container.NewAppTabs(
+		container.NewTabItem("Scanning", g.createScanningTab()),
 		container.NewTabItem("UTXOs", g.createUTXOsTab()),
 		container.NewTabItem("Send", g.createSendTab()),
 		container.NewTabItem("Receive", g.createReceiveTab()),
