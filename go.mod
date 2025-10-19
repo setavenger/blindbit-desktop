@@ -7,7 +7,7 @@ require (
 	github.com/btcsuite/btcd v0.24.2
 	github.com/btcsuite/btcd/btcutil v1.1.6
 	github.com/rs/zerolog v1.34.0
-	github.com/setavenger/blindbit-lib v0.0.2-0.20251019131200-334a0a79ea37
+	github.com/setavenger/blindbit-lib v0.0.2-0.20251019150135-f72945280223
 	github.com/setavenger/go-bip352 v0.1.9-0.20250919170152-7683068d2f35
 	github.com/shopspring/decimal v1.4.0
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e

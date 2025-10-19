@@ -18,16 +18,19 @@ func (m *Manager) PrepareTransaction(
 ) (
 	*wallet.TxMetadata, error,
 ) {
-	tx, err := wallet.SendToRecipients(
-		m.Wallet,
+	txMetadata, err := m.Wallet.SendToRecipients(
 		recipients,
-		feeRate,
+		m.Wallet.GetUTXOs(),
+		int64(feeRate),
+		m.MinChangeAmount, // Minimum change amount
+		false,             // Don't mark here! Wait until after successful broadcast
+		false,             // Don't use unconfirmed spent todo: make optional in UI
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	return tx, nil
+	return txMetadata, nil
 }
 
 // BroadcastTransaction broadcasts a transaction to mempool.space
@@ -58,7 +61,10 @@ func (m *Manager) BroadcastTransaction(txHex string, network types.Network) erro
 }
 
 // RecordSentTransaction records a sent transaction to history with proper net amount calculation
-func (m *Manager) RecordSentTransaction(txMetadata *wallet.TxMetadata, recipients []wallet.Recipient) error {
+func (m *Manager) RecordSentTransaction(
+	txMetadata *wallet.TxMetadata,
+	recipients []wallet.Recipient,
+) error {
 	if txMetadata.Tx == nil {
 		return fmt.Errorf("transaction is nil")
 	}
@@ -77,13 +83,17 @@ func (m *Manager) RecordSentTransaction(txMetadata *wallet.TxMetadata, recipient
 }
 
 // markUTXOsAsSpent marks UTXOs as spent after successful broadcast
+//
+// Deprecated: Wallet does
 func (m *Manager) markUTXOsAsSpent(tx *wire.MsgTx) {
 	for _, txIn := range tx.TxIn {
 		// Find and mark the UTXO as spent
 		for _, utxo := range m.Wallet.GetUTXOs() {
-			if utxo.Txid == txIn.PreviousOutPoint.Hash && utxo.Vout == txIn.PreviousOutPoint.Index {
+			isTxIDMatch := utxo.Txid == txIn.PreviousOutPoint.Hash
+			isVoutMatch := utxo.Vout == txIn.PreviousOutPoint.Index
+			if isTxIDMatch && isVoutMatch {
 				// Mark UTXO as spent
-				utxo.State = wallet.StateSpent
+				utxo.State = wallet.StateUnconfirmedSpent
 				break
 			}
 		}
