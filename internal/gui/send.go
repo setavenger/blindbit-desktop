@@ -13,6 +13,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/setavenger/blindbit-desktop/internal/controller"
+	"github.com/setavenger/blindbit-desktop/internal/storage"
 	"github.com/setavenger/blindbit-lib/logging"
 	"github.com/setavenger/blindbit-lib/utils"
 	"github.com/setavenger/blindbit-lib/wallet"
@@ -255,6 +256,7 @@ func (g *MainGUI) broadcastTransaction(
 	// Broadcast transaction
 	err := g.manager.BroadcastTransaction(txHex, g.manager.GetNetwork())
 	if err != nil {
+		logging.L.Err(err).Str("tx_hex", txHex).Msg("failed to broadcast")
 		dialog.ShowError(fmt.Errorf("failed to broadcast transaction: %v", err), g.window)
 		return
 	}
@@ -271,12 +273,14 @@ func (g *MainGUI) broadcastTransaction(
 	// Show success message
 	dialog.ShowInformation("Success", "Transaction broadcast successfully!", g.window)
 
-	// TODO: Clear form
-}
+	// save wallet in the background
+	go func() {
+		err := storage.SavePlain(g.manager.DataDir, g.manager)
+		if err != nil {
+			logging.L.Err(err).Msg("failed to save wallet")
+			return
+		}
+	}()
 
-func (g *MainGUI) sendTransaction(recipient, amountStr, feeRateStr string) {
-	// todo: this can probably be removed as it's redundant?
-	// This would be called after preview and confirmation
-	// For now, just show a message
-	dialog.ShowInformation("Send", "Send functionality will be implemented after transaction preview", g.window)
+	// TODO: Clear form
 }

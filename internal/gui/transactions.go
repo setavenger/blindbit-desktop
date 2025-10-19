@@ -3,14 +3,13 @@ package gui
 import (
 	"encoding/hex"
 	"fmt"
-	"sort"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 
-	"github.com/setavenger/blindbit-desktop/internal/controller"
+	"github.com/setavenger/blindbit-lib/wallet"
 )
 
 func (g *MainGUI) createTransactionsTab() fyne.CanvasObject {
@@ -50,23 +49,24 @@ func (g *MainGUI) createTransactionsTab() fyne.CanvasObject {
 						txidHex := hex.EncodeToString(tx.TxID[:])
 						label.SetText(fmt.Sprintf("%.8s...", txidHex))
 					case 1:
-						label.SetText(fmt.Sprintf("%d", tx.BlockHeight))
+						label.SetText(fmt.Sprintf("%d", tx.ConfirmHeight))
 					case 2:
 						// Format amount with sign
 						var amountText string
-						if tx.NetAmount > 0 {
-							amountText = fmt.Sprintf("+%d sats", tx.NetAmount)
+						netAmount := tx.NetAmount()
+						if netAmount > 0 {
+							amountText = fmt.Sprintf("+%d sats", netAmount)
 						} else {
-							amountText = fmt.Sprintf("%d sats", tx.NetAmount)
+							amountText = fmt.Sprintf("%d sats", netAmount)
 						}
 						label.SetText(amountText)
 					case 3:
 						// Determine status
 						var status string
-						if tx.BlockHeight > 0 {
+						if tx.ConfirmHeight > 0 {
 							status = "Confirmed"
 						} else {
-							status = "Unconfirmed"
+							status = "Pending"
 						}
 						label.SetText(status)
 					}
@@ -74,6 +74,12 @@ func (g *MainGUI) createTransactionsTab() fyne.CanvasObject {
 			}
 		},
 	)
+
+	// Configure table column widths to prevent overlap
+	table.SetColumnWidth(0, 120) // TXID column
+	table.SetColumnWidth(1, 100) // Block Height column
+	table.SetColumnWidth(2, 120) // Net Amount column
+	table.SetColumnWidth(3, 100) // Status column
 
 	// Set up click handler for transaction details
 	table.OnSelected = func(id widget.TableCellID) {
@@ -102,19 +108,29 @@ This shows all transactions you have successfully broadcast.
 Click on a transaction to view details.
 `)
 
-	// Main content
-	content := container.NewVBox(
-		instructionsText,
-		widget.NewSeparator(),
-		controlPanel,
-		widget.NewSeparator(),
-		table,
+	// Create a scrollable container for the table to ensure it fills available space
+	tableContainer := container.NewScroll(table)
+	tableContainer.SetMinSize(fyne.NewSize(440, 300)) // Set minimum size
+
+	// Main content using Border layout to fill available space
+	content := container.NewBorder(
+		nil, // top
+		nil, // bottom
+		nil, // left
+		nil, // right
+		container.NewVBox(
+			instructionsText,
+			widget.NewSeparator(),
+			controlPanel,
+			widget.NewSeparator(),
+			tableContainer,
+		),
 	)
 
 	return content
 }
 
-func (g *MainGUI) showTransactionHistoryDetails(tx controller.TxHistoryItem) {
+func (g *MainGUI) showTransactionHistoryDetails(tx *wallet.TxItem) {
 	txidHex := hex.EncodeToString(tx.TxID[:])
 
 	detailsText := fmt.Sprintf(`
@@ -130,15 +146,15 @@ Status: %s
 Click "View in Explorer" to see this transaction on mempool.space
 `,
 		txidHex,
-		tx.BlockHeight,
-		tx.NetAmount,
-		tx.Fee,
-		tx.FeeRate,
+		tx.ConfirmHeight,
+		tx.NetAmount(),
+		tx.Fees(),
+		0, // todo: add fee rate
 		func() string {
-			if tx.BlockHeight > 0 {
+			if tx.ConfirmHeight > 0 {
 				return "Confirmed"
 			}
-			return "Unconfirmed"
+			return "Pending"
 		}(),
 	)
 
@@ -167,13 +183,12 @@ Click "View in Explorer" to see this transaction on mempool.space
 }
 
 func (g *MainGUI) refreshTransactions() {
+	// todo: remove this as it's no longer needed
+	// or make this load data from database and update the view
 	// Sync receive transactions from UTXOs
-	g.manager.SyncReceiveTransactions()
 
-	// Sort by block height descending (newest first)
-	sort.Slice(g.manager.TransactionHistory, func(i, j int) bool {
-		return g.manager.TransactionHistory[i].BlockHeight > g.manager.TransactionHistory[j].BlockHeight
-	})
+	// Sort the transaction history using the built-in Sort method
+	g.manager.TransactionHistory.Sort()
 
 	fmt.Println("Refreshing transaction history")
 }

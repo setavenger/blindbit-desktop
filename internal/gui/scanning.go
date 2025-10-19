@@ -236,6 +236,14 @@ func (g *MainGUI) startPeriodicRefresh(chainTipLabel, currentScanLabel, scanStat
 func (g *MainGUI) startRealTimeProgressUpdates(currentScanLabel *widget.Label) {
 	if g.manager.GUIScanProgressChan == nil {
 		logging.L.Warn().Msg("GUI progress channel not initialized")
+		logging.L.Info().Msg("Initilising GUI progress channel")
+		g.manager.GUIScanProgressChan = make(chan uint32)
+		return
+	}
+	if g.manager.StreamEndChan == nil {
+		logging.L.Warn().Msg("stream end channel not initialized")
+		logging.L.Info().Msg("Initialising stream end channel")
+		g.manager.StreamEndChan = make(chan bool)
 		return
 	}
 
@@ -244,14 +252,25 @@ func (g *MainGUI) startRealTimeProgressUpdates(currentScanLabel *widget.Label) {
 	for {
 		select {
 		case height := <-g.manager.GUIScanProgressChan:
-			currentScanLabel.SetText(fmt.Sprintf("Current Scan Height: %d", g.manager.Wallet.LastScanHeight))
-			logging.L.Debug().Uint32("height", height).Msg("GUI updated with real-time scan progress")
+			currentScanLabel.SetText(fmt.Sprintf(
+				"Current Scan Height: %d",
+				g.manager.Wallet.LastScanHeight,
+			))
+			logging.L.Debug().
+				Uint32("height", height).
+				Msg("GUI updated with real-time scan progress")
 		case <-g.manager.StreamEndChan:
-			currentScanLabel.SetText(fmt.Sprintf("Current Scan Height: %d", g.manager.Wallet.LastScanHeight))
+			currentScanLabel.SetText(fmt.Sprintf(
+				"Current Scan Height: %d",
+				g.manager.Wallet.LastScanHeight,
+			))
 			logging.L.Info().Msg("stream ended, GUI updated with final scan height")
 			return
 		case <-time.After(10 * time.Second):
-			currentScanLabel.SetText(fmt.Sprintf("Current Scan Height: %d", g.manager.Wallet.LastScanHeight))
+			currentScanLabel.SetText(fmt.Sprintf(
+				"Current Scan Height: %d",
+				g.manager.Wallet.LastScanHeight,
+			))
 			logging.L.Debug().Msg("GUI updated with real-time scan progress")
 		}
 	}
@@ -259,18 +278,27 @@ func (g *MainGUI) startRealTimeProgressUpdates(currentScanLabel *widget.Label) {
 
 // startStreamEndDetection listens for stream end signals and ensures final updates are shown
 func (g *MainGUI) startStreamEndDetection(currentScanLabel *widget.Label) {
-	if g.manager.StreamEndChan == nil {
-		logging.L.Warn().Msg("stream end channel not initialized")
-		return
-	}
+	// todo: remove this function
+	// redundant with startrealtime processing doing everything
 
-	logging.L.Info().Msg("starting stream end detection for scanning view")
-
+	// if g.manager.StreamEndChan == nil {
+	// 	logging.L.Warn().Msg("stream end channel not initialized")
+	// 	logging.L.Info().Msg("Initialising stream end channel")
+	// 	g.manager.StreamEndChan = make(chan bool)
+	// 	return
+	// }
+	//
+	// logging.L.Info().Msg("starting stream end detection for scanning view")
+	//
 	// for range g.manager.StreamEndChan {
 	// 	// Force update the GUI with the current scan height when stream ends
-	// 	currentScanLabel.SetText(fmt.Sprintf("Current Scan Height: %d", g.manager.Wallet.LastScanHeight))
-	// 	logging.L.Info().Uint64("final_height", g.manager.Wallet.LastScanHeight).Msg("stream ended, GUI updated with final scan height")
+	// 	currentScanLabel.SetText(
+	// 		fmt.Sprintf("Current Scan Height: %d", g.manager.Wallet.LastScanHeight),
+	// 	)
+	// 	logging.L.Info().
+	// 		Uint64("final_height", g.manager.Wallet.LastScanHeight).
+	// 		Msg("stream ended, GUI updated with final scan height")
 	// }
-
-	logging.L.Info().Msg("stream end detection stopped")
+	//
+	// logging.L.Info().Msg("stream end detection stopped")
 }

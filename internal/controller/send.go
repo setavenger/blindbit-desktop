@@ -57,72 +57,18 @@ func (m *Manager) BroadcastTransaction(txHex string, network types.Network) erro
 	return nil
 }
 
-// AddToHistory adds a transaction to the transaction history
-func (m *Manager) AddToHistory(txid [32]byte, netAmount int, blockHeight int) {
-	item := TxHistoryItem{
-		TxID:        txid,
-		NetAmount:   netAmount,
-		BlockHeight: blockHeight,
-	}
-	m.TransactionHistory = append(m.TransactionHistory, item)
-}
-
 // RecordSentTransaction records a sent transaction to history with proper net amount calculation
 func (m *Manager) RecordSentTransaction(txMetadata *wallet.TxMetadata, recipients []wallet.Recipient) error {
 	if txMetadata.Tx == nil {
 		return fmt.Errorf("transaction is nil")
 	}
 
-	// Extract TXID
-	txid := GetTxID(txMetadata.Tx)
+	// Use the TxItemFromTxMetadata function from blindbit-lib
+	txItem := wallet.TxItemFromTxMetadata(m.Wallet, txMetadata)
 
-	// Calculate total sent to external recipients (exclude change)
-	var totalSent uint64
-	for _, recipient := range recipients {
-		if !recipient.IsChange() {
-			totalSent += recipient.GetAmount()
-		}
-	}
-
-	// Calculate total output value
-	var outputSum uint64
-	for _, txOut := range txMetadata.Tx.TxOut {
-		outputSum += uint64(txOut.Value)
-	}
-
-	// Calculate total input value from our UTXOs
-	var inputSum uint64
-	for _, txIn := range txMetadata.Tx.TxIn {
-		// Find the UTXO being spent
-		for _, utxo := range m.Wallet.GetUTXOs() {
-			if utxo.Txid == txIn.PreviousOutPoint.Hash && utxo.Vout == txIn.PreviousOutPoint.Index {
-				inputSum += utxo.Amount
-				break
-			}
-		}
-	}
-
-	// Calculate actual fee: inputs - outputs
-	fee := CalculateTxFee(inputSum, outputSum)
-
-	// Calculate vbytes for fee rate
-	vbytes := CalculateTxVBytes(txMetadata.Tx)
-	feeRate := CalculateFeeRate(fee, vbytes)
-
-	// Net amount is negative for sends: what we sent to external recipients + fee
-	// This represents the total amount that left our wallet
-	netAmount := -int64(totalSent + fee)
-
-	// Create history item
-	item := TxHistoryItem{
-		TxID:        txid,
-		NetAmount:   int(netAmount),
-		BlockHeight: 0, // Unconfirmed initially
-		Fee:         fee,
-		FeeRate:     uint64(feeRate),
-	}
-
-	m.TransactionHistory = append(m.TransactionHistory, item)
+	// Add the transaction to history
+	m.TransactionHistory = append(m.TransactionHistory, txItem)
+	m.TransactionHistory.Sort()
 
 	// Mark UTXOs as spent
 	m.markUTXOsAsSpent(txMetadata.Tx)

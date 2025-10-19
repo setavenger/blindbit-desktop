@@ -79,13 +79,18 @@ func main() {
 			})
 
 			go func() {
-				if err := manager.Scanner.Watch(context.TODO(), uint32(manager.Wallet.LastScanHeight)); err != nil {
+				watchStartHeight := manager.Wallet.LastScanHeight
+				if watchStartHeight == 0 {
+					watchStartHeight = manager.Wallet.BirthHeight
+				}
+				if err := manager.Scanner.Watch(context.TODO(), uint32(watchStartHeight)); err != nil {
 					logging.L.Err(err).Msg("failed to watch scanner")
 					dialog.ShowError(fmt.Errorf("failed to watch scanner: %v", err), mainWindow)
 					return
 				}
 			}()
 
+			walletManager = manager
 			// Setup completed, show main GUI
 			mainGUI := gui.NewMainGUI(myApp, mainWindow, manager)
 			mainWindow.SetContent(mainGUI.GetContent())
@@ -108,7 +113,10 @@ func main() {
 		})
 
 		go func() {
-			if err := walletManager.Scanner.Watch(context.TODO(), uint32(walletManager.Wallet.LastScanHeight)); err != nil {
+			err := walletManager.Scanner.Watch(
+				context.TODO(), uint32(walletManager.Wallet.LastScanHeight),
+			)
+			if err != nil {
 				logging.L.Err(err).Msg("failed to watch scanner")
 				dialog.ShowError(fmt.Errorf("failed to watch scanner: %v", err), mainWindow)
 				return
@@ -118,6 +126,10 @@ func main() {
 		// Wallet loaded successfully, show main GUI
 		mainGUI := gui.NewMainGUI(myApp, mainWindow, walletManager)
 		mainWindow.SetContent(mainGUI.GetContent())
+	}
+
+	if walletManager != nil {
+		defer storage.SavePlain(walletManager.DataDir, walletManager)
 	}
 
 	// Show and run the application

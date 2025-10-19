@@ -25,7 +25,7 @@ type Manager struct {
 	MinChangeAmount uint64         `json:"min_change_amount"`
 	OracleAddress   string         `json:"oracle_address"` // for now only gRPC possible will need a flag and options in future
 
-	TransactionHistory []TxHistoryItem         `json:"transaction_history"`
+	TransactionHistory wallet.TxHistory        `json:"transaction_history"`
 	OracleClient       *v2connect.OracleClient `json:"-"`
 	Scanner            *scannerv2.ScannerV2    `json:"-"`
 
@@ -36,18 +36,19 @@ type Manager struct {
 	ProgressUpdateChan <-chan uint32            `json:"-"`
 
 	// GUI update channels - for real-time UI updates
-	GUIScanProgressChan chan uint32 `json:"-"`
+	GUIScanProgressChan chan uint32 `json:"-"` // todo: review sense of this channel logic
 	StreamEndChan       chan bool   `json:"-"` // Signal when scanning streams end
 }
 
 func NewManager() *Manager {
 	return &Manager{
-		Wallet:    &wallet.Wallet{},
-		DataDir:   "",
-		DustLimit: configs.DefaultMinimumAmount, // default
-		// LabelCount:      0,                    // default
-		MinChangeAmount: configs.DefaultMinimumAmount, // default
-		// OracleAddress:   "",
+		Wallet:              &wallet.Wallet{},
+		DataDir:             "",
+		DustLimit:           configs.DefaultMinimumAmount, // default
+		LabelCount:          configs.DefaultLabelCount,    // default
+		MinChangeAmount:     configs.DefaultMinimumAmount, // default
+		OracleAddress:       configs.DefaultOracleAddress,
+		TransactionHistory:  wallet.TxHistory{},     // Initialize empty TxHistory
 		Scanner:             nil,                    // Don't initialize scanner until needed
 		GUIScanProgressChan: make(chan uint32, 100), // Buffer for GUI updates
 		StreamEndChan:       make(chan bool, 10),    // Buffer for stream end signals
@@ -190,8 +191,6 @@ func (m *Manager) StartChannelHandling(ctx context.Context, saveFunc func() erro
 				if blockSaveCounter >= blocksBetweenSaves {
 					if err := saveFunc(); err != nil {
 						logging.L.Err(err).Msg("failed to save wallet after block progress")
-					} else {
-						// logging.L.Debug().Uint32("height", height).Msg("wallet saved after block progress")
 					}
 					blockSaveCounter = 0
 				}
@@ -222,6 +221,11 @@ func (m *Manager) StartChannelHandling(ctx context.Context, saveFunc func() erro
 					Uint64("amount", utxo.Amount).
 					Uint32("height", utxo.Height).
 					Msg("new UTXO discovered")
+
+				err := m.TransactionHistory.AddOutUtxo(utxo)
+				if err != nil {
+					logging.L.Err(err).Msg("failed to add out UTXO to transaction history")
+				}
 
 				// Save wallet immediately when new UTXO is found
 				if err := saveFunc(); err != nil {

@@ -7,13 +7,14 @@ require (
 	github.com/btcsuite/btcd v0.24.2
 	github.com/btcsuite/btcd/btcutil v1.1.6
 	github.com/rs/zerolog v1.34.0
-	github.com/setavenger/blindbit-lib v0.0.2-0.20251012143314-3e9cc103e56f
+	github.com/setavenger/blindbit-lib v0.0.2-0.20251019131200-334a0a79ea37
 	github.com/setavenger/go-bip352 v0.1.9-0.20250919170152-7683068d2f35
+	github.com/shopspring/decimal v1.4.0
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/spf13/pflag v1.0.5
 )
 
-replace github.com/setavenger/blindbit-lib => ../blindbit-lib/
+// replace github.com/setavenger/blindbit-lib => ../blindbit-lib/
 
 require (
 	fyne.io/systray v1.10.1-0.20231115130155-104f5ef7839e // indirect
@@ -44,7 +45,6 @@ require (
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/rogpeppe/go-internal v1.9.0 // indirect
 	github.com/setavenger/go-libsecp256k1 v0.0.1-0.20250915182350-c8aa8e7d10b3 // indirect
-	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/srwiley/oksvg v0.0.0-20221011165216-be6e8873101c // indirect
 	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef // indirect
 	github.com/stretchr/objx v0.5.2 // indirect

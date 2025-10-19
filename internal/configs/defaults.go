@@ -22,4 +22,5 @@ func DefaultDataDir() string {
 const (
 	DefaultOracleAddress = "127.0.0.1:7001"
 	DefaultMinimumAmount = 546
+	DefaultLabelCount    = 0
 )
