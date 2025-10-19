@@ -65,36 +65,38 @@ func main() {
 
 	if !exists {
 		// No wallet exists, show setup wizard
-		setupWizard := gui.NewSetupWizard(myApp, mainWindow, resolvedDataDir, func(manager *controller.Manager) {
-			// Initialize scanner before showing main GUI
-			if err := manager.ConstructScanner(context.TODO()); err != nil {
-				logging.L.Err(err).Msg("failed to construct scanner after setup")
-				dialog.ShowError(fmt.Errorf("failed to construct scanner: %v", err), mainWindow)
-				return
-			}
-
-			// Start channel handling and background scanning
-			manager.StartChannelHandling(context.TODO(), func() error {
-				return storage.SavePlain(manager.DataDir, manager)
-			})
-
-			go func() {
-				watchStartHeight := manager.Wallet.LastScanHeight
-				if watchStartHeight == 0 {
-					watchStartHeight = manager.Wallet.BirthHeight
-				}
-				if err := manager.Scanner.Watch(context.TODO(), uint32(watchStartHeight)); err != nil {
-					logging.L.Err(err).Msg("failed to watch scanner")
-					dialog.ShowError(fmt.Errorf("failed to watch scanner: %v", err), mainWindow)
+		setupWizard := gui.NewSetupWizard(
+			myApp, mainWindow, resolvedDataDir, func(manager *controller.Manager) {
+				// Initialize scanner before showing main GUI
+				if err := manager.ConstructScanner(context.TODO()); err != nil {
+					logging.L.Err(err).Msg("failed to construct scanner after setup")
+					dialog.ShowError(fmt.Errorf("failed to construct scanner: %v", err), mainWindow)
 					return
 				}
-			}()
 
-			walletManager = manager
-			// Setup completed, show main GUI
-			mainGUI := gui.NewMainGUI(myApp, mainWindow, manager)
-			mainWindow.SetContent(mainGUI.GetContent())
-		})
+				// Start channel handling and background scanning
+				manager.StartChannelHandling(context.TODO(), func() error {
+					return storage.SavePlain(manager.DataDir, manager)
+				})
+
+				go func() {
+					watchStartHeight := manager.Wallet.LastScanHeight
+					if watchStartHeight == 0 {
+						watchStartHeight = manager.Wallet.BirthHeight
+					}
+					if err := manager.Scanner.Watch(context.TODO(), uint32(watchStartHeight)); err != nil {
+						logging.L.Err(err).Msg("failed to watch scanner")
+						dialog.ShowError(fmt.Errorf("failed to watch scanner: %v", err), mainWindow)
+						return
+					}
+				}()
+
+				walletManager = manager
+				// Setup completed, show main GUI
+				mainGUI := gui.NewMainGUI(myApp, mainWindow, manager)
+				mainWindow.SetContent(mainGUI.GetContent())
+			},
+		)
 		setupWizard.Show()
 	} else {
 		// Set the DataDir on the loaded manager

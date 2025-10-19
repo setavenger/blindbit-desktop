@@ -3,12 +3,14 @@ package gui
 import (
 	"encoding/hex"
 	"fmt"
+	"net/url"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/setavenger/blindbit-lib/types"
 	"github.com/setavenger/blindbit-lib/wallet"
 )
 
@@ -89,16 +91,6 @@ func (g *MainGUI) createTransactionsTab() fyne.CanvasObject {
 		}
 	}
 
-	// Refresh button
-	refreshBtn := widget.NewButton("Refresh", func() {
-		g.refreshTransactions()
-	})
-
-	// Control panel
-	controlPanel := container.NewHBox(
-		refreshBtn,
-	)
-
 	// Instructions
 	instructionsText := widget.NewRichTextFromMarkdown(`
 # Transaction History
@@ -121,8 +113,6 @@ Click on a transaction to view details.
 		container.NewVBox(
 			instructionsText,
 			widget.NewSeparator(),
-			controlPanel,
-			widget.NewSeparator(),
 			tableContainer,
 		),
 	)
@@ -140,7 +130,6 @@ Transaction ID: %s
 Block Height: %d
 Net Amount: %d sats
 Fee: %d sats
-Fee Rate: %d sat/vB
 Status: %s
 
 Click "View in Explorer" to see this transaction on mempool.space
@@ -149,7 +138,6 @@ Click "View in Explorer" to see this transaction on mempool.space
 		tx.ConfirmHeight,
 		tx.NetAmount(),
 		tx.Fees(),
-		0, // todo: add fee rate
 		func() string {
 			if tx.ConfirmHeight > 0 {
 				return "Confirmed"
@@ -169,28 +157,13 @@ Click "View in Explorer" to see this transaction on mempool.space
 		g.openInExplorer(txidHex)
 	})
 
-	closeBtn := widget.NewButton("Close", func() {
-		// Close dialog
-	})
-
 	content := container.NewVBox(
 		detailsLabel,
 		widget.NewSeparator(),
-		container.NewHBox(copyBtn, explorerBtn, closeBtn),
+		container.NewHBox(copyBtn, explorerBtn),
 	)
 
 	dialog.ShowCustom("Transaction Details", "Close", content, g.window)
-}
-
-func (g *MainGUI) refreshTransactions() {
-	// todo: remove this as it's no longer needed
-	// or make this load data from database and update the view
-	// Sync receive transactions from UTXOs
-
-	// Sort the transaction history using the built-in Sort method
-	g.manager.TransactionHistory.Sort()
-
-	fmt.Println("Refreshing transaction history")
 }
 
 func (g *MainGUI) copyTxidToClipboard(text string) {
@@ -202,7 +175,27 @@ func (g *MainGUI) copyTxidToClipboard(text string) {
 }
 
 func (g *MainGUI) openInExplorer(txid string) {
-	// TODO: Open mempool.space explorer
-	// This would typically open the default browser
-	dialog.ShowInformation("Explorer", "Opening mempool.space explorer...", g.window)
+	// Open mempool.space explorer using Fyne's built-in OpenURL
+	var urlStr string
+	switch g.manager.GetNetwork() {
+	case types.NetworkMainnet:
+		urlStr = "https://mempool.space/tx/" + txid
+	case types.NetworkTestnet:
+		urlStr = "https://mempool.space/testnet/tx/" + txid
+	case types.NetworkSignet:
+		urlStr = "https://mempool.space/signet/tx/" + txid
+	default:
+		urlStr = "https://mempool.space/tx/" + txid
+	}
+
+	u, err := url.Parse(urlStr)
+	if err != nil {
+		dialog.ShowError(fmt.Errorf("failed to parse URL: %v", err), g.window)
+		return
+	}
+
+	err = g.app.OpenURL(u)
+	if err != nil {
+		dialog.ShowError(fmt.Errorf("failed to open URL: %v", err), g.window)
+	}
 }
