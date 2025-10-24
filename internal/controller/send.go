@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/setavenger/blindbit-lib/types"
+	"github.com/setavenger/blindbit-lib/utils"
 	"github.com/setavenger/blindbit-lib/wallet"
 )
 
@@ -82,14 +84,12 @@ func (m *Manager) RecordSentTransaction(
 	return nil
 }
 
-// markUTXOsAsSpent marks UTXOs as spent after successful broadcast
-//
-// Deprecated: Wallet does
+// markUTXOsAsSpent marks UTXOs as spent (unconfirmed spend) after successful broadcast
 func (m *Manager) markUTXOsAsSpent(tx *wire.MsgTx) {
 	for _, txIn := range tx.TxIn {
 		// Find and mark the UTXO as spent
 		for _, utxo := range m.Wallet.GetUTXOs() {
-			isTxIDMatch := utxo.Txid == txIn.PreviousOutPoint.Hash
+			isTxIDMatch := bytes.Equal(utxo.Txid[:], utils.ReverseBytesCopy(txIn.PreviousOutPoint.Hash[:]))
 			isVoutMatch := utxo.Vout == txIn.PreviousOutPoint.Index
 			if isTxIDMatch && isVoutMatch {
 				// Mark UTXO as spent
