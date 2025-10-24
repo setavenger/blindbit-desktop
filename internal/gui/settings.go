@@ -48,7 +48,7 @@ func (g *MainGUI) createSettingsTab() fyne.CanvasObject {
 	// Birth height
 	birthHeightLabel := widget.NewLabel("Birth Height:")
 	birthHeightEntry := widget.NewEntry()
-	birthHeightEntry.SetText(fmt.Sprintf("%d", g.manager.BirthHeight))
+	birthHeightEntry.SetText(fmt.Sprintf("%d", g.manager.GetBirthHeight()))
 
 	// Dust limit
 	dustLimitLabel := widget.NewLabel("Dust Limit (satoshis):")
@@ -99,7 +99,7 @@ func (g *MainGUI) saveSettings(oracleAddr, birthHeightStr, dustLimitStr, minChan
 	// Parse birth height
 	if birthHeightStr != "" {
 		if height, err := strconv.Atoi(birthHeightStr); err == nil {
-			g.manager.BirthHeight = height
+			g.manager.SetBirthHeight(uint64(height), false)
 		} else {
 			dialog.ShowError(fmt.Errorf("invalid birth height: %v", err), g.window)
 			return
@@ -145,7 +145,7 @@ func (g *MainGUI) resetToDefaults(oracleEntry, birthHeightEntry, dustLimitEntry,
 	g.manager.OracleAddress = "127.0.0.1:7001"
 
 	birthHeightEntry.SetText("0")
-	g.manager.BirthHeight = 0
+	g.manager.SetBirthHeight(0, false)
 
 	dustLimitEntry.SetText("546")
 	g.manager.DustLimit = 546

@@ -134,8 +134,8 @@ To ensure you have written down your seed phrase correctly, please enter it belo
 	confirmBtn := widget.NewButton("Confirm Seed Phrase", func() {
 		enteredMnemonic := strings.TrimSpace(mnemonicEntry.Text)
 		if enteredMnemonic == mnemonic {
-			// Mnemonic matches, proceed to configuration
-			s.createWalletFromMnemonic(mnemonic)
+			// Mnemonic matches, proceed to network selection
+			s.showNetworkSelection(mnemonic)
 		} else {
 			err := errors.New("seed phrase does not match. Please try again")
 			dialog.ShowError(err, s.window)
@@ -167,7 +167,7 @@ func (s *SetupWizard) showImportDialog() {
 	importBtn := widget.NewButton("Import Wallet", func() {
 		mnemonic := strings.TrimSpace(mnemonicEntry.Text)
 		if s.validateMnemonic(mnemonic) {
-			s.createWalletFromMnemonic(mnemonic)
+			s.showNetworkSelection(mnemonic)
 		} else {
 			dialog.ShowError(fmt.Errorf("invalid mnemonic"), s.window)
 		}
@@ -189,9 +189,56 @@ func (s *SetupWizard) showImportDialog() {
 	s.window.Resize(fyne.NewSize(600, 500))
 }
 
-func (s *SetupWizard) createWalletFromMnemonic(mnemonic string) {
-	// Create wallet from mnemonic (default to signet for now, will be configurable)
-	walletInstance, err := wallet.NewFromMnemonic(mnemonic, types.NetworkSignet)
+func (s *SetupWizard) showNetworkSelection(mnemonic string) {
+	networkText := widget.NewRichTextFromMarkdown(`
+# Select Network
+
+Choose the Bitcoin network for your wallet:
+
+- **Mainnet**: The production Bitcoin network (real Bitcoin)
+- **Testnet**: Bitcoin test network for testing purposes
+- **Signet**: Bitcoin signet network for development and testing
+
+**Note**: You can change this later in settings, but it's important to choose correctly now.
+`)
+
+	var selectedNetwork types.Network
+	networkRadio := widget.NewRadioGroup([]string{"mainnet", "testnet", "signet"}, func(value string) {
+		switch value {
+		case "mainnet":
+			selectedNetwork = types.NetworkMainnet
+		case "testnet":
+			selectedNetwork = types.NetworkTestnet
+		case "signet":
+			selectedNetwork = types.NetworkSignet
+		}
+	})
+	networkRadio.SetSelected("signet") // Default to signet
+
+	continueBtn := widget.NewButton("Continue", func() {
+		s.createWalletFromMnemonic(mnemonic, selectedNetwork)
+	})
+
+	backBtn := widget.NewButton("Back", func() {
+		s.showWelcomeDialog()
+	})
+
+	content := container.NewVBox(
+		networkText,
+		widget.NewSeparator(),
+		networkRadio,
+		widget.NewSeparator(),
+		container.NewHBox(backBtn, continueBtn),
+	)
+
+	// Set the window content directly
+	s.window.SetContent(content)
+	s.window.Resize(fyne.NewSize(600, 500))
+}
+
+func (s *SetupWizard) createWalletFromMnemonic(mnemonic string, network types.Network) {
+	// Create wallet from mnemonic with the selected network
+	walletInstance, err := wallet.NewFromMnemonic(mnemonic, network)
 	if err != nil {
 		dialog.ShowError(fmt.Errorf("failed to create wallet from mnemonic: %v", err), s.window)
 		return
@@ -207,20 +254,6 @@ func (s *SetupWizard) createWalletFromMnemonic(mnemonic string) {
 }
 
 func (s *SetupWizard) showConfigurationDialog(manager *controller.Manager) {
-	// Network selection
-	networkLabel := widget.NewLabel("Network:")
-	networkRadio := widget.NewRadioGroup([]string{"mainnet", "testnet", "signet"}, func(value string) {
-		switch value {
-		case "mainnet":
-			manager.Wallet.Network = types.NetworkMainnet
-		case "testnet":
-			manager.Wallet.Network = types.NetworkTestnet
-		case "signet":
-			manager.Wallet.Network = types.NetworkSignet
-		}
-	})
-	networkRadio.SetSelected("signet") // Default to signet
-
 	// Birth height
 	birthHeightEntry := widget.NewEntry()
 	birthHeightEntry.SetPlaceHolder("Leave empty for current height")
@@ -245,8 +278,12 @@ func (s *SetupWizard) showConfigurationDialog(manager *controller.Manager) {
 		// Parse birth height
 		if birthHeightEntry.Text != "" {
 			if height, err := strconv.Atoi(birthHeightEntry.Text); err == nil {
-				manager.BirthHeight = height
+				// Set the wallet's BirthHeight and LastScanHeight for new wallets
+				manager.SetBirthHeight(uint64(height), true)
 			}
+		} else {
+			// If no birth height specified, set to 0 and let the scanner handle it
+			manager.SetBirthHeight(0, true)
 		}
 
 		// Parse dust limit
@@ -281,9 +318,6 @@ func (s *SetupWizard) showConfigurationDialog(manager *controller.Manager) {
 
 	content := container.NewVBox(
 		widget.NewLabel("Configure your wallet:"),
-		widget.NewSeparator(),
-		networkLabel,
-		networkRadio,
 		widget.NewSeparator(),
 		birthHeightLabel,
 		birthHeightEntry,

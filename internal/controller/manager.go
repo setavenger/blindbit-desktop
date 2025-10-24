@@ -19,7 +19,6 @@ import (
 type Manager struct {
 	Wallet          *wallet.Wallet `json:"wallet_data"`
 	DataDir         string         `json:"-"`
-	BirthHeight     int            `json:"birth_height"`
 	DustLimit       int            `json:"dust_limit"`
 	LabelCount      int            `json:"label_count"` // should always be 0
 	MinChangeAmount uint64         `json:"min_change_amount"`
@@ -127,6 +126,25 @@ func (m *Manager) GetBalance() uint64 {
 	}
 
 	return total
+}
+
+// GetBirthHeight returns the wallet's birth height
+func (m *Manager) GetBirthHeight() uint64 {
+	if m.Wallet == nil {
+		return 0
+	}
+	return m.Wallet.BirthHeight
+}
+
+// SetBirthHeight sets the wallet's birth height and optionally LastScanHeight
+func (m *Manager) SetBirthHeight(height uint64, setLastScanHeight bool) {
+	if m.Wallet == nil {
+		return
+	}
+	m.Wallet.BirthHeight = height
+	if setLastScanHeight {
+		m.Wallet.LastScanHeight = height
+	}
 }
 
 // GetCurrentHeight queries the oracle for the current blockchain height

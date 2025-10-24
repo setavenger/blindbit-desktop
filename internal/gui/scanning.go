@@ -56,7 +56,7 @@ func (g *MainGUI) createScanningTab() fyne.CanvasObject {
 				return
 			}
 		} else {
-			height = g.manager.BirthHeight
+			height = int(g.manager.GetBirthHeight())
 		}
 
 		g.startRescanning(height)
