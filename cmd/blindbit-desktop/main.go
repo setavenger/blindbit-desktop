@@ -43,7 +43,7 @@ func main() {
 	// Create the main window
 	mainWindow := myApp.NewWindow("BlindBit Desktop")
 
-	mainWindow.Resize(fyne.NewSize(800, 600))
+	mainWindow.Resize(fyne.NewSize(1000, 750))
 	mainWindow.CenterOnScreen()
 
 	// Try to load existing wallet manager

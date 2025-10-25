@@ -205,22 +205,27 @@ func (g *MainGUI) startPeriodicUTXOUpdates(
 }
 
 // startRealTimeUTXOUpdates listens for new UTXOs from the scanner
+// bug: cannot be used with owned chan.
+// More than one receiver make things get lost on either receiver A or B
+//
+// Deprecated: we need a specific broadcast channel to fix this.
 func (g *MainGUI) startRealTimeUTXOUpdates(
 	balanceLabel *widget.Label,
 	utxoList *widget.List,
 	debugLabel *widget.Label,
 	filterCheck *widget.Check,
 ) {
-	// Listen to the manager's UTXO channel for real-time updates
-	if g.manager.OwnedUTXOsChan != nil {
-		for range g.manager.OwnedUTXOsChan {
-			// New UTXO found, update UI immediately
-			g.updateBalance(balanceLabel)
-			g.updateDebugInfo(debugLabel)
-			utxoList.Refresh()
-			logging.L.Info().Msg("UTXO list updated due to new UTXO discovery")
-		}
-	}
+	// tickerChan := time.NewTicker(10 * time.Second)
+	// // Listen to the manager's UTXO channel for real-time updates
+	// if g.manager.OwnedUTXOsChan != nil {
+	// 	for range tickerChan.C {
+	// 		// New UTXO found, update UI immediately
+	// 		g.updateBalance(balanceLabel)
+	// 		g.updateDebugInfo(debugLabel)
+	// 		utxoList.Refresh()
+	// 		logging.L.Info().Msg("UTXO list updated due to new UTXO discovery")
+	// 	}
+	// }
 }
 
 func (g *MainGUI) refreshUTXOs(utxoList *widget.List, debugLabel *widget.Label) {

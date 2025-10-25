@@ -10,7 +10,7 @@ import (
 
 	"github.com/setavenger/blindbit-desktop/internal/configs"
 	"github.com/setavenger/blindbit-lib/logging"
-	"github.com/setavenger/blindbit-lib/networking/v2connect"
+	"github.com/setavenger/blindbit-lib/networking/grpc"
 	"github.com/setavenger/blindbit-lib/scanning/scannerv2"
 	"github.com/setavenger/blindbit-lib/wallet"
 	"github.com/setavenger/go-bip352"
@@ -23,10 +23,11 @@ type Manager struct {
 	LabelCount      int            `json:"label_count"` // should always be 0
 	MinChangeAmount uint64         `json:"min_change_amount"`
 	OracleAddress   string         `json:"oracle_address"` // for now only gRPC possible will need a flag and options in future
+	OracleUseTLS    bool           `json:"oracle_use_tls"`
 
-	TransactionHistory wallet.TxHistory        `json:"transaction_history"`
-	OracleClient       *v2connect.OracleClient `json:"-"`
-	Scanner            *scannerv2.ScannerV2    `json:"-"`
+	TransactionHistory wallet.TxHistory     `json:"transaction_history"`
+	OracleClient       *grpc.OracleClient   `json:"-"`
+	Scanner            *scannerv2.ScannerV2 `json:"-"`
 
 	// scnaner channels - internal use only
 	// Deprecated: modify the blindbit-lib scanner
@@ -62,7 +63,7 @@ func (m *Manager) ConstructScanner(ctx context.Context) error {
 		return errors.New("address is empty string")
 	}
 	if m.OracleClient == nil {
-		oracleClient, err := v2connect.NewClient(ctx, m.OracleAddress)
+		oracleClient, err := grpc.NewClient(ctx, m.OracleAddress, m.OracleUseTLS)
 		if err != nil {
 			logging.L.Err(err).
 				Str("address", m.OracleAddress).
@@ -243,6 +244,7 @@ func (m *Manager) StartChannelHandling(ctx context.Context, saveFunc func() erro
 				err := m.TransactionHistory.AddOutUtxo(utxo)
 				if err != nil {
 					logging.L.Err(err).Msg("failed to add out UTXO to transaction history")
+					continue
 				}
 
 				// Save wallet immediately when new UTXO is found

@@ -2,6 +2,7 @@ package gui
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 
 	"fyne.io/fyne/v2"
@@ -45,6 +46,12 @@ func (g *MainGUI) createSettingsTab() fyne.CanvasObject {
 	oracleEntry := widget.NewEntry()
 	oracleEntry.SetText(g.manager.OracleAddress)
 
+	// Connection Use TLS
+	useTLSLabel := widget.NewLabel("Use TLS:")
+	useTLSCheck := &widget.Check{}
+	useTLSCheck.SetChecked(g.manager.OracleUseTLS)
+	useTLSContainer := container.NewHBox(useTLSLabel, useTLSCheck)
+
 	// Birth height
 	birthHeightLabel := widget.NewLabel("Birth Height:")
 	birthHeightEntry := widget.NewEntry()
@@ -62,12 +69,25 @@ func (g *MainGUI) createSettingsTab() fyne.CanvasObject {
 
 	// Save button
 	saveBtn := widget.NewButton("Save Settings", func() {
-		g.saveSettings(oracleEntry.Text, birthHeightEntry.Text, dustLimitEntry.Text, minChangeEntry.Text)
+		g.saveSettings(
+			oracleEntry.Text,
+			birthHeightEntry.Text,
+			dustLimitEntry.Text,
+			minChangeEntry.Text,
+			useTLSCheck.Checked,
+		)
 	})
 
 	// Reset button
 	resetBtn := widget.NewButton("Reset to Defaults", func() {
-		g.resetToDefaults(oracleEntry, birthHeightEntry, dustLimitEntry, minChangeEntry, networkRadio)
+		g.resetToDefaults(
+			oracleEntry,
+			birthHeightEntry,
+			dustLimitEntry,
+			minChangeEntry,
+			useTLSCheck,
+			networkRadio,
+		)
 	})
 
 	// Form layout
@@ -79,6 +99,7 @@ func (g *MainGUI) createSettingsTab() fyne.CanvasObject {
 		widget.NewSeparator(),
 		oracleLabel,
 		oracleEntry,
+		useTLSContainer,
 		widget.NewSeparator(),
 		birthHeightLabel,
 		birthHeightEntry,
@@ -95,7 +116,10 @@ func (g *MainGUI) createSettingsTab() fyne.CanvasObject {
 	return form
 }
 
-func (g *MainGUI) saveSettings(oracleAddr, birthHeightStr, dustLimitStr, minChangeStr string) {
+func (g *MainGUI) saveSettings(
+	oracleAddr, birthHeightStr, dustLimitStr, minChangeStr string,
+	useTLS bool,
+) {
 	// Parse birth height
 	if birthHeightStr != "" {
 		if height, err := strconv.Atoi(birthHeightStr); err == nil {
@@ -124,6 +148,7 @@ func (g *MainGUI) saveSettings(oracleAddr, birthHeightStr, dustLimitStr, minChan
 
 	// Set oracle address
 	g.manager.OracleAddress = oracleAddr
+	g.manager.OracleUseTLS = useTLS
 
 	// Save the manager
 	if err := storage.SavePlain(g.manager.DataDir, g.manager); err != nil {
@@ -134,9 +159,17 @@ func (g *MainGUI) saveSettings(oracleAddr, birthHeightStr, dustLimitStr, minChan
 
 	// Show success message
 	dialog.ShowInformation("Success", "Settings saved successfully!", g.window)
+	g.askForShutdown()
 }
 
-func (g *MainGUI) resetToDefaults(oracleEntry, birthHeightEntry, dustLimitEntry, minChangeEntry *widget.Entry, networkRadio *widget.RadioGroup) {
+func (g *MainGUI) resetToDefaults(
+	oracleEntry,
+	birthHeightEntry,
+	dustLimitEntry,
+	minChangeEntry *widget.Entry,
+	useTLSCheck *widget.Check,
+	networkRadio *widget.RadioGroup,
+) {
 	// Reset to default values
 	networkRadio.SetSelected("testnet")
 	g.manager.Wallet.Network = types.NetworkTestnet
@@ -153,5 +186,46 @@ func (g *MainGUI) resetToDefaults(oracleEntry, birthHeightEntry, dustLimitEntry,
 	minChangeEntry.SetText("546")
 	g.manager.MinChangeAmount = 546
 
+	useTLSCheck.SetChecked(false)
+	g.manager.OracleUseTLS = false
+
 	dialog.ShowInformation("Reset", "Settings reset to defaults", g.window)
+}
+
+func (g *MainGUI) askForShutdown() {
+	// Ask user to restart the application to apply changes fully
+	dialog.ShowCustomConfirm(
+		"Restart Required",
+		"Shutdown Now",
+		"Later",
+		widget.NewLabel("Some settings may require you to restart the program to take full effect. Shutdown?"),
+		func(confirmed bool) {
+			if confirmed {
+				os.Exit(0)
+			} else {
+				dialog.ShowInformation("Settings", "Settings saved. Restart later to apply all changes.", g.window)
+			}
+		},
+		g.window,
+	)
+}
+
+func (g *MainGUI) askForRestart() {
+	// Ask user to restart the application to apply changes fully
+	dialog.ShowCustomConfirm(
+		"Restart Required",
+		"Restart Now",
+		"Later",
+		widget.NewLabel("Some settings may require a restart to take full effect. Restart now?"),
+		func(confirmed bool) {
+			if confirmed {
+				if err := g.restartApplication(); err != nil {
+					dialog.ShowError(fmt.Errorf("failed to restart application: %v", err), g.window)
+				}
+			} else {
+				dialog.ShowInformation("Settings", "Settings saved. Restart later to apply all changes.", g.window)
+			}
+		},
+		g.window,
+	)
 }
