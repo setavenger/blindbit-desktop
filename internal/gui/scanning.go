@@ -40,7 +40,9 @@ func (g *MainGUI) createScanningTab() fyne.CanvasObject {
 
 	// Rescan from height input
 	rescanHeightEntry := widget.NewEntry()
-	rescanHeightEntry.SetPlaceHolder("Enter height to rescan from (leave empty for birth height)")
+	rescanHeightEntry.SetPlaceHolder(
+		"Enter height to rescan from (leave empty for birth height)",
+	)
 	rescanHeightLabel := widget.NewLabel("Rescan from height:")
 
 	// Control buttons
@@ -117,11 +119,20 @@ func (g *MainGUI) startRescanning(fromHeight int) {
 		return
 	}
 
-	g.performScan(uint32(fromHeight), "Rescanning", fmt.Sprintf("Rescanning started from height %s to current tip", FormatHeightUint64(uint64(fromHeight))))
+	g.performScan(
+		uint32(fromHeight), "Rescanning",
+		fmt.Sprintf(
+			"Rescanning started from height %s to current tip",
+			FormatHeightUint64(uint64(fromHeight)),
+		),
+	)
 }
 
 // performScan is the unified scanning function that handles rescanning operations
-func (g *MainGUI) performScan(startHeight uint32, operationName, dialogMessage string) {
+func (g *MainGUI) performScan(
+	startHeight uint32,
+	operationName, dialogMessage string,
+) {
 	// Start scanning from specified height to current tip
 	go func() {
 		// Get current height
@@ -150,7 +161,9 @@ func (g *MainGUI) performScan(startHeight uint32, operationName, dialogMessage s
 			if g.manager.GUIScanProgressChan != nil {
 				select {
 				case g.manager.GUIScanProgressChan <- currentHeight:
-					logging.L.Debug().Uint32("final_height", currentHeight).Msg("sent final scan update to GUI")
+					logging.L.Debug().
+						Uint32("final_height", currentHeight).
+						Msg("sent final scan update to GUI")
 				default:
 					logging.L.Debug().Msg("GUI progress channel full, skipping final update")
 				}
@@ -177,9 +190,13 @@ func (g *MainGUI) performScan(startHeight uint32, operationName, dialogMessage s
 	dialog.ShowInformation(operationName, dialogMessage, g.window)
 }
 
-func (g *MainGUI) refreshScanStatus(currentScanLabel, chainTipLabel, scanStatusLabel *widget.Label) {
+func (g *MainGUI) refreshScanStatus(
+	currentScanLabel, chainTipLabel, scanStatusLabel *widget.Label,
+) {
 	// Update current scan height from wallet - always show the value
-	currentScanLabel.SetText("Current Scan Height: " + FormatHeightUint64(g.manager.Wallet.LastScanHeight))
+	currentScanLabel.SetText(
+		"Current Scan Height: " + FormatHeightUint64(g.manager.Wallet.LastScanHeight),
+	)
 
 	// Update chain tip from oracle
 	if currentHeight, err := g.manager.GetCurrentHeight(); err == nil {
@@ -202,7 +219,9 @@ func (g *MainGUI) refreshScanStatus(currentScanLabel, chainTipLabel, scanStatusL
 }
 
 // startPeriodicRefresh starts a goroutine that periodically refreshes chain tip and scan status
-func (g *MainGUI) startPeriodicRefresh(chainTipLabel, currentScanLabel, scanStatusLabel *widget.Label) {
+func (g *MainGUI) startPeriodicRefresh(
+	chainTipLabel, currentScanLabel, scanStatusLabel *widget.Label,
+) {
 	ticker := time.NewTicker(10 * time.Second) // Refresh every 10 seconds for better responsiveness
 	defer ticker.Stop()
 
@@ -216,7 +235,9 @@ func (g *MainGUI) startPeriodicRefresh(chainTipLabel, currentScanLabel, scanStat
 		}
 
 		// Update current scan height - always show the value
-		currentScanLabel.SetText("Current Scan Height: " + FormatHeightUint64(g.manager.Wallet.LastScanHeight))
+		currentScanLabel.SetText(
+			"Current Scan Height: " + FormatHeightUint64(g.manager.Wallet.LastScanHeight),
+		)
 
 		// Update scanning status
 		if g.manager.OracleClient != nil {
@@ -232,7 +253,8 @@ func (g *MainGUI) startPeriodicRefresh(chainTipLabel, currentScanLabel, scanStat
 	}
 }
 
-// startRealTimeProgressUpdates listens to the scanner's progress channel and updates the GUI in real-time
+// startRealTimeProgressUpdates listens to the scanner's progress channel
+// and updates the GUI in real-time
 func (g *MainGUI) startRealTimeProgressUpdates(currentScanLabel *widget.Label) {
 	if g.manager.GUIScanProgressChan == nil {
 		logging.L.Warn().Msg("GUI progress channel not initialized")
@@ -252,16 +274,22 @@ func (g *MainGUI) startRealTimeProgressUpdates(currentScanLabel *widget.Label) {
 	for {
 		select {
 		case height := <-g.manager.GUIScanProgressChan:
-			currentScanLabel.SetText("Current Scan Height: " + FormatHeightUint64(g.manager.Wallet.LastScanHeight))
+			currentScanLabel.SetText(
+				"Current Scan Height: " + FormatHeightUint64(g.manager.Wallet.LastScanHeight),
+			)
 			logging.L.Debug().
 				Uint32("height", height).
 				Msg("GUI updated with real-time scan progress")
 		case <-g.manager.StreamEndChan:
-			currentScanLabel.SetText("Current Scan Height: " + FormatHeightUint64(g.manager.Wallet.LastScanHeight))
+			currentScanLabel.SetText(
+				"Current Scan Height: " + FormatHeightUint64(g.manager.Wallet.LastScanHeight),
+			)
 			logging.L.Info().Msg("stream ended, GUI updated with final scan height")
 			return
 		case <-time.After(10 * time.Second):
-			currentScanLabel.SetText("Current Scan Height: " + FormatHeightUint64(g.manager.Wallet.LastScanHeight))
+			currentScanLabel.SetText(
+				"Current Scan Height: " + FormatHeightUint64(g.manager.Wallet.LastScanHeight),
+			)
 			logging.L.Debug().Msg("GUI updated with real-time scan progress")
 		}
 	}
