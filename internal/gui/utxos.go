@@ -79,8 +79,8 @@ func (g *MainGUI) createUTXOsTab() fyne.CanvasObject {
 					labelLabel.SetText("-")
 				}
 
-				valueLabel.SetText(fmt.Sprintf("%d sats", utxo.Amount))
-				heightLabel.SetText(fmt.Sprintf("%d", utxo.Height))
+				valueLabel.SetText(FormatSatoshiUint64(utxo.Amount))
+				heightLabel.SetText(FormatHeight(utxo.Height))
 				stateLabel.SetText(utxo.State.String())
 			}
 		},
@@ -139,7 +139,7 @@ func (g *MainGUI) updateBalance(balanceLabel *widget.Label) {
 	for _, utxo := range unspentUTXOs {
 		total += utxo.Amount
 	}
-	balanceLabel.SetText(fmt.Sprintf("Balance: %d sats", total))
+	balanceLabel.SetText("Balance: " + FormatSatoshiUint64(total))
 }
 
 // updateDebugInfo updates the debug label with current UTXO information

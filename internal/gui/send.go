@@ -80,7 +80,7 @@ func (g *MainGUI) previewTransaction(recipient, amountStr, feeRateStr string) {
 	}
 
 	// Parse amount as uint64 (satoshis)
-	amount, err := strconv.ParseUint(amountStr, 10, 64)
+	amount, err := ParseFormattedUint64(amountStr)
 	if err != nil {
 		dialog.ShowError(fmt.Errorf("invalid amount: %v", err), g.window)
 		return
@@ -201,18 +201,18 @@ func (g *MainGUI) showTransactionDetails(
 Transaction Details:
 
 Recipients: %d
-Net Amount: %d sats
-Fee: %d sats
+Net Amount: %s
+Fee: %s
 Fee Rate: %.2f sat/vB
-Total: %d sats
+Total: %s
 
 Transaction prepared successfully
 `,
 		len(recipients),
-		netAmount,
-		fee,
+		FormatSatoshi(netAmount),
+		FormatSatoshiUint64(fee),
 		feeRateFloat,
-		int64(totalSent),
+		FormatSatoshiUint64(totalSent),
 	)
 
 	detailsLabel := widget.NewLabel(detailsText)

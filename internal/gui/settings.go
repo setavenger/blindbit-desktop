@@ -3,7 +3,6 @@ package gui
 import (
 	"fmt"
 	"os"
-	"strconv"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -55,17 +54,17 @@ func (g *MainGUI) createSettingsTab() fyne.CanvasObject {
 	// Birth height
 	birthHeightLabel := widget.NewLabel("Birth Height:")
 	birthHeightEntry := widget.NewEntry()
-	birthHeightEntry.SetText(fmt.Sprintf("%d", g.manager.GetBirthHeight()))
+	birthHeightEntry.SetText(FormatHeightUint64(g.manager.GetBirthHeight()))
 
 	// Dust limit
 	dustLimitLabel := widget.NewLabel("Dust Limit (satoshis):")
 	dustLimitEntry := widget.NewEntry()
-	dustLimitEntry.SetText(fmt.Sprintf("%d", g.manager.DustLimit))
+	dustLimitEntry.SetText(FormatNumber(int64(g.manager.DustLimit)))
 
 	// Min change amount
 	minChangeLabel := widget.NewLabel("Min Change Amount (satoshis):")
 	minChangeEntry := widget.NewEntry()
-	minChangeEntry.SetText(fmt.Sprintf("%d", g.manager.MinChangeAmount))
+	minChangeEntry.SetText(FormatUint64(g.manager.MinChangeAmount))
 
 	// Save button
 	saveBtn := widget.NewButton("Save Settings", func() {
@@ -122,8 +121,8 @@ func (g *MainGUI) saveSettings(
 ) {
 	// Parse birth height
 	if birthHeightStr != "" {
-		if height, err := strconv.Atoi(birthHeightStr); err == nil {
-			g.manager.SetBirthHeight(uint64(height), false)
+		if height, err := ParseFormattedUint64(birthHeightStr); err == nil {
+			g.manager.SetBirthHeight(height, false)
 		} else {
 			dialog.ShowError(fmt.Errorf("invalid birth height: %v", err), g.window)
 			return
@@ -131,15 +130,15 @@ func (g *MainGUI) saveSettings(
 	}
 
 	// Parse dust limit
-	if dustLimit, err := strconv.Atoi(dustLimitStr); err == nil {
-		g.manager.DustLimit = dustLimit
+	if dustLimit, err := ParseFormattedNumber(dustLimitStr); err == nil {
+		g.manager.DustLimit = int(dustLimit)
 	} else {
 		dialog.ShowError(fmt.Errorf("invalid dust limit: %v", err), g.window)
 		return
 	}
 
 	// Parse min change amount
-	if minChange, err := strconv.ParseUint(minChangeStr, 10, 64); err == nil {
+	if minChange, err := ParseFormattedUint64(minChangeStr); err == nil {
 		g.manager.MinChangeAmount = minChange
 	} else {
 		dialog.ShowError(fmt.Errorf("invalid min change amount: %v", err), g.window)

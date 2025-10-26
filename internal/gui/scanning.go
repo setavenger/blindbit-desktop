@@ -117,7 +117,7 @@ func (g *MainGUI) startRescanning(fromHeight int) {
 		return
 	}
 
-	g.performScan(uint32(fromHeight), "Rescanning", fmt.Sprintf("Rescanning started from height %d to current tip", fromHeight))
+	g.performScan(uint32(fromHeight), "Rescanning", fmt.Sprintf("Rescanning started from height %s to current tip", FormatHeightUint64(uint64(fromHeight))))
 }
 
 // performScan is the unified scanning function that handles rescanning operations
@@ -179,11 +179,11 @@ func (g *MainGUI) performScan(startHeight uint32, operationName, dialogMessage s
 
 func (g *MainGUI) refreshScanStatus(currentScanLabel, chainTipLabel, scanStatusLabel *widget.Label) {
 	// Update current scan height from wallet - always show the value
-	currentScanLabel.SetText(fmt.Sprintf("Current Scan Height: %d", g.manager.Wallet.LastScanHeight))
+	currentScanLabel.SetText("Current Scan Height: " + FormatHeightUint64(g.manager.Wallet.LastScanHeight))
 
 	// Update chain tip from oracle
 	if currentHeight, err := g.manager.GetCurrentHeight(); err == nil {
-		chainTipLabel.SetText(fmt.Sprintf("Chain Tip: %d", currentHeight))
+		chainTipLabel.SetText("Chain Tip: " + FormatHeight(currentHeight))
 	} else {
 		chainTipLabel.SetText("Chain Tip: Unable to fetch")
 		logging.L.Err(err).Msg("failed to get current height from oracle")
@@ -209,14 +209,14 @@ func (g *MainGUI) startPeriodicRefresh(chainTipLabel, currentScanLabel, scanStat
 	for range ticker.C {
 		// Update chain tip
 		if currentHeight, err := g.manager.GetCurrentHeight(); err == nil {
-			chainTipLabel.SetText(fmt.Sprintf("Chain Tip: %d", currentHeight))
+			chainTipLabel.SetText("Chain Tip: " + FormatHeight(currentHeight))
 		} else {
 			chainTipLabel.SetText("Chain Tip: Unable to fetch")
 			logging.L.Err(err).Msg("periodic refresh failed to get current height")
 		}
 
 		// Update current scan height - always show the value
-		currentScanLabel.SetText(fmt.Sprintf("Current Scan Height: %d", g.manager.Wallet.LastScanHeight))
+		currentScanLabel.SetText("Current Scan Height: " + FormatHeightUint64(g.manager.Wallet.LastScanHeight))
 
 		// Update scanning status
 		if g.manager.OracleClient != nil {
@@ -252,25 +252,16 @@ func (g *MainGUI) startRealTimeProgressUpdates(currentScanLabel *widget.Label) {
 	for {
 		select {
 		case height := <-g.manager.GUIScanProgressChan:
-			currentScanLabel.SetText(fmt.Sprintf(
-				"Current Scan Height: %d",
-				g.manager.Wallet.LastScanHeight,
-			))
+			currentScanLabel.SetText("Current Scan Height: " + FormatHeightUint64(g.manager.Wallet.LastScanHeight))
 			logging.L.Debug().
 				Uint32("height", height).
 				Msg("GUI updated with real-time scan progress")
 		case <-g.manager.StreamEndChan:
-			currentScanLabel.SetText(fmt.Sprintf(
-				"Current Scan Height: %d",
-				g.manager.Wallet.LastScanHeight,
-			))
+			currentScanLabel.SetText("Current Scan Height: " + FormatHeightUint64(g.manager.Wallet.LastScanHeight))
 			logging.L.Info().Msg("stream ended, GUI updated with final scan height")
 			return
 		case <-time.After(10 * time.Second):
-			currentScanLabel.SetText(fmt.Sprintf(
-				"Current Scan Height: %d",
-				g.manager.Wallet.LastScanHeight,
-			))
+			currentScanLabel.SetText("Current Scan Height: " + FormatHeightUint64(g.manager.Wallet.LastScanHeight))
 			logging.L.Debug().Msg("GUI updated with real-time scan progress")
 		}
 	}

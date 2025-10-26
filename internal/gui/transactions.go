@@ -51,15 +51,17 @@ func (g *MainGUI) createTransactionsTab() fyne.CanvasObject {
 						txidHex := hex.EncodeToString(tx.TxID[:])
 						label.SetText(fmt.Sprintf("%.8s...", txidHex))
 					case 1:
-						label.SetText(fmt.Sprintf("%d", tx.ConfirmHeight))
+						label.SetText(FormatNumber(int64(tx.ConfirmHeight)))
 					case 2:
 						// Format amount with sign
 						var amountText string
 						netAmount := tx.NetAmount()
 						if netAmount > 0 {
-							amountText = fmt.Sprintf("+%d sats", netAmount)
+							amountText = "+" + FormatSatoshiUint64(uint64(netAmount))
+						} else if netAmount < 0 {
+							amountText = FormatSatoshi(int64(netAmount))
 						} else {
-							amountText = fmt.Sprintf("%d sats", netAmount)
+							amountText = FormatSatoshiUint64(0)
 						}
 						label.SetText(amountText)
 					case 3:
@@ -127,17 +129,17 @@ func (g *MainGUI) showTransactionHistoryDetails(tx *wallet.TxItem) {
 Transaction Details:
 
 Transaction ID: %s
-Block Height: %d
-Net Amount: %d sats
-Fee: %d sats
+Block Height: %s
+Net Amount: %s
+Fee: %s
 Status: %s
 
 Click "View in Explorer" to see this transaction on mempool.space
 `,
 		txidHex,
-		tx.ConfirmHeight,
-		tx.NetAmount(),
-		tx.Fees(),
+		FormatNumber(int64(tx.ConfirmHeight)),
+		FormatSatoshi(int64(tx.NetAmount())),
+		FormatSatoshi(int64(tx.Fees())),
 		func() string {
 			if tx.ConfirmHeight > 0 {
 				return "Confirmed"
