@@ -27,13 +27,20 @@ func (g *MainGUI) createUTXOsTab() fyne.CanvasObject {
 	unspentOnlyCheck := widget.NewCheck("Show only unspent UTXOs", nil)
 	unspentOnlyCheck.SetChecked(true) // Default to showing only unspent
 
-	// Create table headers with proper alignment
+	// Create table headers with proper alignment and styling
+	createHeaderLabel := func(text string) *widget.Label {
+		label := widget.NewLabel(text)
+		label.TextStyle.Bold = true
+		label.Alignment = fyne.TextAlignLeading
+		return label
+	}
+
 	headers := container.NewGridWithColumns(5,
-		widget.NewLabel("Outpoint"),
-		widget.NewLabel("Label"),
-		widget.NewLabel("Value"),
-		widget.NewLabel("Height"),
-		widget.NewLabel("State"),
+		createHeaderLabel("Outpoint"),
+		createHeaderLabel("Label"),
+		createHeaderLabel("Value"),
+		createHeaderLabel("Height"),
+		createHeaderLabel("State"),
 	)
 
 	// UTXO list with proper columns
@@ -99,24 +106,28 @@ func (g *MainGUI) createUTXOsTab() fyne.CanvasObject {
 		g.updateBalance(balanceLabel)
 	}
 
-	// Main content
-	content := container.NewVBox(
-		titleLabel,
-		widget.NewSeparator(),
-		balanceLabel,
-		widget.NewSeparator(),
-		container.NewHBox(unspentOnlyCheck, refreshBtn),
-		widget.NewSeparator(),
-		headers,
-		widget.NewSeparator(),
-	)
-
 	// Create a scrollable container for the list
 	scrollContainer := container.NewScroll(utxoList)
 	scrollContainer.SetMinSize(fyne.NewSize(400, 300)) // Set minimum size
 
-	// Add the scrollable list to the main content
-	content.Add(scrollContainer)
+	// Main content using Border layout to fill available space
+	// Put controls at top and list in center to make list fill remaining vertical space
+	content := container.NewBorder(
+		container.NewVBox(
+			titleLabel,
+			widget.NewSeparator(),
+			balanceLabel,
+			widget.NewSeparator(),
+			container.NewHBox(unspentOnlyCheck, refreshBtn),
+			widget.NewSeparator(),
+			headers,
+			widget.NewSeparator(),
+		), // top
+		nil,             // bottom
+		nil,             // left
+		nil,             // right
+		scrollContainer, // center - this will fill all remaining space
+	)
 
 	return content
 }

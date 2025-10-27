@@ -15,84 +15,6 @@ import (
 )
 
 func (g *MainGUI) createTransactionsTab() fyne.CanvasObject {
-	// Create table with headers
-	table := widget.NewTable(
-		func() (int, int) {
-			return len(g.manager.TransactionHistory) + 1, 4 // +1 for header row
-		},
-		func() fyne.CanvasObject {
-			return widget.NewLabel("")
-		},
-		func(id widget.TableCellID, obj fyne.CanvasObject) {
-			label := obj.(*widget.Label)
-
-			if id.Row == 0 {
-				// Header row
-				switch id.Col {
-				case 0:
-					label.SetText("TXID")
-				case 1:
-					label.SetText("Block Height")
-				case 2:
-					label.SetText("Net Amount")
-				case 3:
-					label.SetText("Status")
-				}
-				label.TextStyle.Bold = true
-			} else {
-				// Data rows
-				history := g.manager.TransactionHistory
-				if id.Row-1 < len(history) {
-					tx := history[id.Row-1]
-
-					switch id.Col {
-					case 0:
-						// Truncate TXID for display
-						txidHex := hex.EncodeToString(tx.TxID[:])
-						label.SetText(fmt.Sprintf("%.8s...", txidHex))
-					case 1:
-						label.SetText(FormatNumber(int64(tx.ConfirmHeight)))
-					case 2:
-						// Format amount with sign
-						var amountText string
-						netAmount := tx.NetAmount()
-						if netAmount > 0 {
-							amountText = "+" + FormatSatoshiUint64(uint64(netAmount))
-						} else if netAmount < 0 {
-							amountText = FormatSatoshi(int64(netAmount))
-						} else {
-							amountText = FormatSatoshiUint64(0)
-						}
-						label.SetText(amountText)
-					case 3:
-						// Determine status
-						var status string
-						if tx.ConfirmHeight > 0 {
-							status = "Confirmed"
-						} else {
-							status = "Pending"
-						}
-						label.SetText(status)
-					}
-				}
-			}
-		},
-	)
-
-	// Configure table column widths to prevent overlap
-	table.SetColumnWidth(0, 120) // TXID column
-	table.SetColumnWidth(1, 100) // Block Height column
-	table.SetColumnWidth(2, 120) // Net Amount column
-	table.SetColumnWidth(3, 100) // Status column
-
-	// Set up click handler for transaction details
-	table.OnSelected = func(id widget.TableCellID) {
-		if id.Row > 0 && id.Row-1 < len(g.manager.TransactionHistory) {
-			tx := g.manager.TransactionHistory[id.Row-1]
-			g.showTransactionHistoryDetails(tx)
-		}
-	}
-
 	// Instructions
 	instructionsText := widget.NewRichTextFromMarkdown(`
 # Transaction History
@@ -102,21 +24,102 @@ This shows all transactions you have successfully broadcast.
 Click on a transaction to view details.
 `)
 
-	// Create a scrollable container for the table to ensure it fills available space
-	tableContainer := container.NewScroll(table)
-	tableContainer.SetMinSize(fyne.NewSize(440, 300)) // Set minimum size
+	// Create header labels with proper alignment and styling
+	createHeaderLabel := func(text string) *widget.Label {
+		label := widget.NewLabel(text)
+		label.TextStyle.Bold = true
+		label.Alignment = fyne.TextAlignLeading
+		return label
+	}
+
+	// Create headers in a grid matching the list's 4 columns
+	headers := container.NewGridWithColumns(4,
+		createHeaderLabel("TXID"),
+		createHeaderLabel("Block Height"),
+		createHeaderLabel("Net Amount"),
+		createHeaderLabel("Status"),
+	)
+
+	// Transaction list with proper columns
+	txList := widget.NewList(
+		func() int {
+			return len(g.manager.TransactionHistory)
+		},
+		func() fyne.CanvasObject {
+			// Create a container with 4 labels for each row
+			return container.NewGridWithColumns(4,
+				widget.NewLabel(""), // TXID
+				widget.NewLabel(""), // Block Height
+				widget.NewLabel(""), // Net Amount
+				widget.NewLabel(""), // Status
+			)
+		},
+		func(id widget.ListItemID, obj fyne.CanvasObject) {
+			history := g.manager.TransactionHistory
+			if id < len(history) {
+				tx := history[id]
+				container := obj.(*fyne.Container)
+
+				// Get the labels from the container
+				txidLabel := container.Objects[0].(*widget.Label)
+				heightLabel := container.Objects[1].(*widget.Label)
+				amountLabel := container.Objects[2].(*widget.Label)
+				statusLabel := container.Objects[3].(*widget.Label)
+
+				// Set the data
+				txidHex := hex.EncodeToString(tx.TxID[:])
+				txidLabel.SetText(fmt.Sprintf("%.8s...", txidHex))
+				heightLabel.SetText(FormatNumber(int64(tx.ConfirmHeight)))
+
+				// Format amount with sign
+				var amountText string
+				netAmount := tx.NetAmount()
+				if netAmount > 0 {
+					amountText = "+" + FormatSatoshiUint64(uint64(netAmount))
+				} else if netAmount < 0 {
+					amountText = FormatSatoshi(int64(netAmount))
+				} else {
+					amountText = FormatSatoshiUint64(0)
+				}
+				amountLabel.SetText(amountText)
+
+				// Determine status
+				var status string
+				if tx.ConfirmHeight > 0 {
+					status = "Confirmed"
+				} else {
+					status = "Pending"
+				}
+				statusLabel.SetText(status)
+			}
+		},
+	)
+
+	// Set up click handler for transaction details
+	txList.OnSelected = func(id widget.ListItemID) {
+		if id < len(g.manager.TransactionHistory) {
+			tx := g.manager.TransactionHistory[id]
+			g.showTransactionHistoryDetails(tx)
+		}
+	}
+
+	// Create a scrollable container for the list (like UTXOs)
+	scrollContainer := container.NewScroll(txList)
+	scrollContainer.SetMinSize(fyne.NewSize(440, 300)) // Set minimum size
 
 	// Main content using Border layout to fill available space
+	// Put instructions and headers at top, list in center to make list fill remaining vertical space
 	content := container.NewBorder(
-		nil, // top
-		nil, // bottom
-		nil, // left
-		nil, // right
 		container.NewVBox(
 			instructionsText,
 			widget.NewSeparator(),
-			tableContainer,
-		),
+			headers,
+			widget.NewSeparator(),
+		), // top
+		nil,             // bottom
+		nil,             // left
+		nil,             // right
+		scrollContainer, // center - wrapped in scroll to match UTXOs pattern
 	)
 
 	return content
