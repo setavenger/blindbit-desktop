@@ -23,10 +23,6 @@ func (g *MainGUI) createUTXOsTab() fyne.CanvasObject {
 	balanceLabel := widget.NewLabel("Balance: 0 sats")
 	balanceLabel.TextStyle.Bold = true
 
-	// Debug info label
-	debugLabel := widget.NewLabel("Debug: Loading UTXOs...")
-	debugLabel.TextStyle.Italic = true
-
 	// Filter checkbox for unspent UTXOs only
 	unspentOnlyCheck := widget.NewCheck("Show only unspent UTXOs", nil)
 	unspentOnlyCheck.SetChecked(true) // Default to showing only unspent
@@ -88,24 +84,19 @@ func (g *MainGUI) createUTXOsTab() fyne.CanvasObject {
 
 	// Refresh button
 	refreshBtn := widget.NewButton("Refresh UTXOs", func() {
-		g.refreshUTXOs(utxoList, debugLabel)
+		g.refreshUTXOs(utxoList)
 	})
 
 	// Update initial values
 	g.updateBalance(balanceLabel)
-	g.updateDebugInfo(debugLabel)
 
 	// Set up periodic updates
-	go g.startPeriodicUTXOUpdates(balanceLabel, utxoList, debugLabel, unspentOnlyCheck)
-
-	// Set up real-time updates from scanner
-	go g.startRealTimeUTXOUpdates(balanceLabel, utxoList, debugLabel, unspentOnlyCheck)
+	go g.startPeriodicUTXOUpdates(balanceLabel, utxoList)
 
 	// Filter change handler
 	unspentOnlyCheck.OnChanged = func(checked bool) {
 		utxoList.Refresh()
 		g.updateBalance(balanceLabel)
-		g.updateDebugInfo(debugLabel)
 	}
 
 	// Main content
@@ -113,8 +104,6 @@ func (g *MainGUI) createUTXOsTab() fyne.CanvasObject {
 		titleLabel,
 		widget.NewSeparator(),
 		balanceLabel,
-		widget.NewSeparator(),
-		debugLabel,
 		widget.NewSeparator(),
 		container.NewHBox(unspentOnlyCheck, refreshBtn),
 		widget.NewSeparator(),
@@ -142,33 +131,6 @@ func (g *MainGUI) updateBalance(balanceLabel *widget.Label) {
 	balanceLabel.SetText("Balance: " + FormatSatoshiUint64(total))
 }
 
-// updateDebugInfo updates the debug label with current UTXO information
-func (g *MainGUI) updateDebugInfo(debugLabel *widget.Label) {
-	allUTXOs := g.manager.GetUTXOsSorted()
-	unspentUTXOs := g.manager.GetUnspentUTXOsSorted()
-
-	// Check if wallet is properly initialized
-	walletInfo := "Wallet: "
-	if g.manager.Wallet == nil {
-		walletInfo += "NOT INITIALIZED"
-	} else {
-		walletInfo += "INITIALIZED"
-	}
-
-	// Debug: let's also check raw wallet data
-	rawUTXOs := g.manager.Wallet.GetUTXOs()
-
-	text := fmt.Sprintf(
-		"Debug: %s | %d total UTXOs, %d unspent UTXOs (raw: %d)",
-		walletInfo,
-		len(allUTXOs),
-		len(unspentUTXOs),
-		len(rawUTXOs),
-	)
-
-	debugLabel.SetText(text)
-}
-
 // getFilteredUTXOs returns UTXOs based on the filter setting, sorted by height (descending)
 func (g *MainGUI) getFilteredUTXOs(unspentOnly bool) []*wallet.OwnedUTXO {
 	var utxos []*wallet.OwnedUTXO
@@ -190,8 +152,6 @@ func (g *MainGUI) getFilteredUTXOs(unspentOnly bool) []*wallet.OwnedUTXO {
 func (g *MainGUI) startPeriodicUTXOUpdates(
 	balanceLabel *widget.Label,
 	utxoList *widget.List,
-	debugLabel *widget.Label,
-	filterCheck *widget.Check,
 ) {
 	ticker := time.NewTicker(60 * time.Second) // Update every 60 seconds (reduced frequency)
 	defer ticker.Stop()
@@ -199,38 +159,12 @@ func (g *MainGUI) startPeriodicUTXOUpdates(
 	for range ticker.C {
 		// Update UI components
 		g.updateBalance(balanceLabel)
-		g.updateDebugInfo(debugLabel)
 		utxoList.Refresh()
 	}
 }
 
-// startRealTimeUTXOUpdates listens for new UTXOs from the scanner
-// bug: cannot be used with owned chan.
-// More than one receiver make things get lost on either receiver A or B
-//
-// Deprecated: we need a specific broadcast channel to fix this.
-func (g *MainGUI) startRealTimeUTXOUpdates(
-	balanceLabel *widget.Label,
-	utxoList *widget.List,
-	debugLabel *widget.Label,
-	filterCheck *widget.Check,
-) {
-	// tickerChan := time.NewTicker(10 * time.Second)
-	// // Listen to the manager's UTXO channel for real-time updates
-	// if g.manager.OwnedUTXOsChan != nil {
-	// 	for range tickerChan.C {
-	// 		// New UTXO found, update UI immediately
-	// 		g.updateBalance(balanceLabel)
-	// 		g.updateDebugInfo(debugLabel)
-	// 		utxoList.Refresh()
-	// 		logging.L.Info().Msg("UTXO list updated due to new UTXO discovery")
-	// 	}
-	// }
-}
-
-func (g *MainGUI) refreshUTXOs(utxoList *widget.List, debugLabel *widget.Label) {
+func (g *MainGUI) refreshUTXOs(utxoList *widget.List) {
 	// Refresh the UTXO list
 	logging.L.Info().Msg("Refreshing UTXO list")
-	g.updateDebugInfo(debugLabel)
 	utxoList.Refresh()
 }

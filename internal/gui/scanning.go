@@ -30,11 +30,6 @@ func (g *MainGUI) createScanningTab() fyne.CanvasObject {
 	// Chain tip height
 	chainTipLabel := widget.NewLabel("Chain Tip: N/A")
 
-	// Scanning status
-	scanStatusLabel := widget.NewLabel("Status: Not scanning")
-	scanStatusLabel.TextStyle.Bold = true
-	scanStatusLabel.Hide() //todo: remove completely
-
 	// Rescan options
 	rescanTitle := widget.NewLabel("Rescan Options")
 	rescanTitle.TextStyle.Bold = true
@@ -65,19 +60,15 @@ func (g *MainGUI) createScanningTab() fyne.CanvasObject {
 		g.startRescanning(height)
 	})
 
-	refreshBtn := widget.NewButton("Refresh Status", func() {
-		g.refreshScanStatus(currentScanLabel, chainTipLabel, scanStatusLabel)
-	})
-
 	// Progress bar
 	progressBar := widget.NewProgressBar()
 	progressBar.Hide()
 
 	// Update initial values
-	g.refreshScanStatus(currentScanLabel, chainTipLabel, scanStatusLabel)
+	g.refreshScanStatus(currentScanLabel, chainTipLabel)
 
 	// Start periodic refresh of chain tip
-	go g.startPeriodicRefresh(chainTipLabel, currentScanLabel, scanStatusLabel)
+	go g.startPeriodicRefresh(chainTipLabel, currentScanLabel)
 
 	// Start real-time progress updates from scanner
 	go g.startRealTimeProgressUpdates(currentScanLabel)
@@ -90,14 +81,13 @@ func (g *MainGUI) createScanningTab() fyne.CanvasObject {
 		scanStatusTitle,
 		currentScanLabel,
 		chainTipLabel,
-		scanStatusLabel,
 	)
 
 	rescanSection := container.NewVBox(
 		rescanTitle,
 		rescanHeightLabel,
 		rescanHeightEntry,
-		container.NewHBox(rescanBtn, refreshBtn),
+		container.NewHBox(rescanBtn),
 	)
 
 	// Main content
@@ -153,7 +143,9 @@ func (g *MainGUI) performScan(
 
 		// Start rescanning - channel handling is done by the manager
 		// err = g.manager.Scanner.Scan(context.Background(), startHeight, currentHeight)
-		err = g.manager.Scanner.Scan(context.Background(), startHeight, currentHeight, rescan)
+		err = g.manager.Scanner.Scan(
+			context.Background(), startHeight, currentHeight, rescan,
+		)
 		if err != nil {
 			logging.L.Err(err).Msg("rescanning failed")
 		} else {
@@ -194,7 +186,7 @@ func (g *MainGUI) performScan(
 }
 
 func (g *MainGUI) refreshScanStatus(
-	currentScanLabel, chainTipLabel, scanStatusLabel *widget.Label,
+	currentScanLabel, chainTipLabel *widget.Label,
 ) {
 	// Update current scan height from wallet - always show the value
 	currentScanLabel.SetText(
@@ -208,22 +200,11 @@ func (g *MainGUI) refreshScanStatus(
 		chainTipLabel.SetText("Chain Tip: Unable to fetch")
 		logging.L.Err(err).Msg("failed to get current height from oracle")
 	}
-
-	// Update scanning status
-	if g.manager.OracleClient != nil {
-		if g.manager.Scanner != nil {
-			scanStatusLabel.SetText("Status: Scanner ready")
-		} else {
-			scanStatusLabel.SetText("Status: Oracle connected, scanner not initialized")
-		}
-	} else {
-		scanStatusLabel.SetText("Status: Oracle not connected")
-	}
 }
 
 // startPeriodicRefresh starts a goroutine that periodically refreshes chain tip and scan status
 func (g *MainGUI) startPeriodicRefresh(
-	chainTipLabel, currentScanLabel, scanStatusLabel *widget.Label,
+	chainTipLabel, currentScanLabel *widget.Label,
 ) {
 	ticker := time.NewTicker(10 * time.Second) // Refresh every 10 seconds for better responsiveness
 	defer ticker.Stop()
@@ -241,18 +222,6 @@ func (g *MainGUI) startPeriodicRefresh(
 		currentScanLabel.SetText(
 			"Current Scan Height: " + FormatHeightUint64(g.manager.Wallet.LastScanHeight),
 		)
-
-		// Update scanning status
-		if g.manager.OracleClient != nil {
-			if g.manager.Scanner != nil {
-				scanStatusLabel.SetText("Status: Scanner ready")
-			} else {
-				scanStatusLabel.SetText("Status: Oracle connected, scanner not initialized")
-			}
-		} else {
-			scanStatusLabel.SetText("Status: Oracle not connected")
-		}
-
 	}
 }
 
