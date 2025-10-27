@@ -33,6 +33,7 @@ func (g *MainGUI) createScanningTab() fyne.CanvasObject {
 	// Scanning status
 	scanStatusLabel := widget.NewLabel("Status: Not scanning")
 	scanStatusLabel.TextStyle.Bold = true
+	scanStatusLabel.Hide() //todo: remove completely
 
 	// Rescan options
 	rescanTitle := widget.NewLabel("Rescan Options")
@@ -292,7 +293,7 @@ func (g *MainGUI) startRealTimeProgressUpdates(currentScanLabel *widget.Label) {
 			currentScanLabel.SetText(
 				"Current Scan Height: " + FormatHeightUint64(g.manager.Wallet.LastScanHeight),
 			)
-			logging.L.Debug().Msg("GUI updated with real-time scan progress")
+			// logging.L.Trace().Msg("GUI updated with real-time scan progress")
 		}
 	}
 }
