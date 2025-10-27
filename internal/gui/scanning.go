@@ -125,6 +125,7 @@ func (g *MainGUI) startRescanning(fromHeight int) {
 			"Rescanning started from height %s to current tip",
 			FormatHeightUint64(uint64(fromHeight)),
 		),
+		true,
 	)
 }
 
@@ -132,6 +133,7 @@ func (g *MainGUI) startRescanning(fromHeight int) {
 func (g *MainGUI) performScan(
 	startHeight uint32,
 	operationName, dialogMessage string,
+	rescan bool,
 ) {
 	// Start scanning from specified height to current tip
 	go func() {
@@ -150,7 +152,7 @@ func (g *MainGUI) performScan(
 
 		// Start rescanning - channel handling is done by the manager
 		// err = g.manager.Scanner.Scan(context.Background(), startHeight, currentHeight)
-		err = g.manager.Scanner.Scan(context.Background(), startHeight, currentHeight)
+		err = g.manager.Scanner.Scan(context.Background(), startHeight, currentHeight, rescan)
 		if err != nil {
 			logging.L.Err(err).Msg("rescanning failed")
 		} else {

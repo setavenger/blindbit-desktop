@@ -63,6 +63,11 @@ func main() {
 		resolvedDataDir = utils.ResolvePath(resolvedDataDir)
 	}
 
+	if err = logging.EnableFileLogging(resolvedDataDir, "debug.log"); err != nil {
+		fmt.Println("base_dir:", resolvedDataDir)
+		logging.L.Fatal().Err(err).Msg("error setting log file")
+	}
+
 	if !exists {
 		// No wallet exists, show setup wizard
 		setupWizard := gui.NewSetupWizard(
