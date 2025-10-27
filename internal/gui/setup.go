@@ -264,6 +264,11 @@ func (s *SetupWizard) showConfigurationDialog(manager *controller.Manager) {
 	oracleEntry.SetText(configs.DefaultOracleAddress)
 	oracleLabel := widget.NewLabel("Oracle Address:")
 
+	// Connection Use TLS
+	useTLSLabel := widget.NewLabel("Use TLS:")
+	useTLSCheck := widget.NewCheck("", nil)
+	useTLSCheck.SetChecked(false)
+
 	// Dust limit
 	dustLimitEntry := widget.NewEntry()
 	dustLimitEntry.SetText(fmt.Sprintf("%d", configs.DefaultMinimumAmount))
@@ -298,6 +303,7 @@ func (s *SetupWizard) showConfigurationDialog(manager *controller.Manager) {
 
 		// Set oracle address
 		manager.OracleAddress = oracleEntry.Text
+		manager.OracleUseTLS = useTLSCheck.Checked
 
 		// Save the manager
 		if err := storage.SavePlain(s.dataDir, manager); err != nil {
@@ -323,6 +329,7 @@ func (s *SetupWizard) showConfigurationDialog(manager *controller.Manager) {
 		birthHeightEntry,
 		oracleLabel,
 		oracleEntry,
+		container.NewHBox(useTLSLabel, useTLSCheck),
 		dustLimitLabel,
 		dustLimitEntry,
 		minChangeLabel,
