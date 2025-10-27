@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/btcsuite/btcd/wire"
+	"github.com/setavenger/blindbit-lib/logging"
 	"github.com/setavenger/blindbit-lib/types"
 	"github.com/setavenger/blindbit-lib/utils"
 	"github.com/setavenger/blindbit-lib/wallet"
@@ -72,7 +73,11 @@ func (m *Manager) RecordSentTransaction(
 	}
 
 	// Use the TxItemFromTxMetadata function from blindbit-lib
-	txItem := wallet.TxItemFromTxMetadata(m.Wallet, txMetadata)
+	txItem, err := wallet.TxItemFromTxMetadata(m.Wallet, txMetadata)
+	if err != nil {
+		logging.L.Err(err).Msg("failed to map tx to tx history item")
+		return err
+	}
 
 	// Add the transaction to history
 	m.TransactionHistory = append(m.TransactionHistory, txItem)
