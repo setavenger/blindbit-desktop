@@ -325,8 +325,8 @@ github.com/rs/zerolog v1.34.0/go.mod h1:bJsvje4Z08ROH4Nhs5iH600c3IkWhwp44iRc54W6
 github.com/russross/blackfriday/v2 v2.0.1/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
 github.com/ryanuber/columnize v0.0.0-20160712163229-9b3edd62028f/go.mod h1:sm1tb6uqfes/u+d4ooFouqFdy9/2g9QGwK3SQygK0Ts=
 github.com/sean-/seed v0.0.0-20170313163322-e2103e2c3529/go.mod h1:DxrIzT+xaE7yg65j358z/aeFdxmN0P9QXhEzd20vsDc=
-github.com/setavenger/blindbit-lib v0.0.2-0.20251027075047-fab7c08afba4 h1:6CcMT8NpydW79pilBUAg2Dt/L/kBAAEnYamsXM1pXp4=
-github.com/setavenger/blindbit-lib v0.0.2-0.20251027075047-fab7c08afba4/go.mod h1:tLd3N3jdty0MMjOAD7J4i4Vufmggks2wUtkQsFd8CqA=
+github.com/setavenger/blindbit-lib v0.0.2-0.20251027210024-a537629f51fc h1:V8kteco3a3Vt93ZDIhpaf6QZMYcOjozxLAPZx+puXJ8=
+github.com/setavenger/blindbit-lib v0.0.2-0.20251027210024-a537629f51fc/go.mod h1:tLd3N3jdty0MMjOAD7J4i4Vufmggks2wUtkQsFd8CqA=
 github.com/setavenger/go-bip352 v0.1.9-0.20250919170152-7683068d2f35 h1:SO7qG88fWMhINMfcTUvbUAupJcYBipCZ4od81/tB+UI=
 github.com/setavenger/go-bip352 v0.1.9-0.20250919170152-7683068d2f35/go.mod h1:j+5v4nI/7n9IBEnvr6LagRpe6whTAHjIBRtqJKyJKG4=
 github.com/setavenger/go-libsecp256k1 v0.0.1-0.20250915182350-c8aa8e7d10b3 h1:nhChiO74Xzh7nwnuXvYFp5M+O4y7mlSXIjZrnLcE3bI=
