@@ -44,14 +44,14 @@ func NewManager() *Manager {
 	return &Manager{
 		Wallet:              &wallet.Wallet{},
 		DataDir:             "",
-		DustLimit:           configs.DefaultMinimumAmount, // default
-		LabelCount:          configs.DefaultLabelCount,    // default
-		MinChangeAmount:     configs.DefaultMinimumAmount, // default
-		OracleAddress:       configs.DefaultOracleAddress,
-		TransactionHistory:  wallet.TxHistory{},     // Initialize empty TxHistory
-		Scanner:             nil,                    // Don't initialize scanner until needed
-		GUIScanProgressChan: make(chan uint32, 100), // Buffer for GUI updates
-		StreamEndChan:       make(chan bool, 10),    // Buffer for stream end signals
+		DustLimit:           configs.DefaultMinimumAmount,       // default
+		LabelCount:          configs.DefaultLabelCount,          // default
+		MinChangeAmount:     configs.DefaultMinimumAmount,       // default
+		OracleAddress:       configs.DefaultOracleAddressSignet, // set basic default
+		TransactionHistory:  wallet.TxHistory{},                 // Initialize empty TxHistory
+		Scanner:             nil,                                // Don't initialize scanner until needed
+		GUIScanProgressChan: make(chan uint32, 100),             // Buffer for GUI updates
+		StreamEndChan:       make(chan bool, 10),                // Buffer for stream end signals
 	}
 }
 

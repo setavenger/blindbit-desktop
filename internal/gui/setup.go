@@ -197,9 +197,9 @@ Choose the Bitcoin network for your wallet:
 
 - **Mainnet**: The production Bitcoin network (real Bitcoin)
 - **Testnet**: Bitcoin test network for testing purposes
-- **Signet**: Bitcoin signet network for development and testing
+- **Signet**:  Bitcoin signet network for development and testing
 
-**Note**: You can change this later in settings, but it's important to choose correctly now.
+**Note**: You can change this later in settings.
 `)
 
 	var selectedNetwork types.Network
@@ -213,7 +213,9 @@ Choose the Bitcoin network for your wallet:
 			selectedNetwork = types.NetworkSignet
 		}
 	})
-	networkRadio.SetSelected("signet") // Default to signet
+	// Initialize based on defaults
+	networkRadio.SetSelected(configs.DefaultNetwork)
+	selectedNetwork = types.NetworkSignet
 
 	continueBtn := widget.NewButton("Continue", func() {
 		s.createWalletFromMnemonic(mnemonic, selectedNetwork)
@@ -254,20 +256,32 @@ func (s *SetupWizard) createWalletFromMnemonic(mnemonic string, network types.Ne
 }
 
 func (s *SetupWizard) showConfigurationDialog(manager *controller.Manager) {
-	// Birth height
+	// Birth height - prefilled with current block height
 	birthHeightEntry := widget.NewEntry()
 	birthHeightEntry.SetPlaceHolder("Leave empty for current height")
 	birthHeightLabel := widget.NewLabel("Birth Height (optional):")
 
-	// Oracle address
+	// Fetch current block height and prefill
+	go func() {
+		height, err := configs.GetCurrentBlockHeight(manager.Wallet.Network)
+		if err == nil {
+			birthHeightEntry.SetText(fmt.Sprintf("%d", height))
+			logging.L.Debug().Uint64("height", height).Msg("prefilled birth height from blockchain")
+		} else {
+			logging.L.Warn().Err(err).Msg("failed to fetch current block height")
+		}
+	}()
+
+	// Oracle address (prefilled from selected network)
 	oracleEntry := widget.NewEntry()
-	oracleEntry.SetText(configs.DefaultOracleAddress)
+	oracleDefault := configs.DefaultOracleAddressForNetwork(manager.Wallet.Network)
+	oracleEntry.SetText(oracleDefault)
 	oracleLabel := widget.NewLabel("Oracle Address:")
 
 	// Connection Use TLS
 	useTLSLabel := widget.NewLabel("Use TLS:")
 	useTLSCheck := widget.NewCheck("", nil)
-	useTLSCheck.SetChecked(false)
+	useTLSCheck.SetChecked(true)
 
 	// Dust limit
 	dustLimitEntry := widget.NewEntry()
