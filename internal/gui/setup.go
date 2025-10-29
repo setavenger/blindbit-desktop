@@ -26,7 +26,12 @@ type SetupWizard struct {
 	onFinish func(*controller.Manager)
 }
 
-func NewSetupWizard(app fyne.App, window fyne.Window, dataDir string, onFinish func(*controller.Manager)) *SetupWizard {
+func NewSetupWizard(
+	app fyne.App,
+	window fyne.Window,
+	dataDir string,
+	onFinish func(*controller.Manager),
+) *SetupWizard {
 	return &SetupWizard{
 		app:      app,
 		window:   window,
@@ -203,16 +208,19 @@ Choose the Bitcoin network for your wallet:
 `)
 
 	var selectedNetwork types.Network
-	networkRadio := widget.NewRadioGroup([]string{"mainnet", "testnet", "signet"}, func(value string) {
-		switch value {
-		case "mainnet":
-			selectedNetwork = types.NetworkMainnet
-		case "testnet":
-			selectedNetwork = types.NetworkTestnet
-		case "signet":
-			selectedNetwork = types.NetworkSignet
-		}
-	})
+	networkRadio := widget.NewRadioGroup(
+		[]string{"mainnet", "testnet", "signet"},
+		func(value string) {
+			switch value {
+			case "mainnet":
+				selectedNetwork = types.NetworkMainnet
+			case "testnet":
+				selectedNetwork = types.NetworkTestnet
+			case "signet":
+				selectedNetwork = types.NetworkSignet
+			}
+		},
+	)
 	// Initialize based on defaults
 	networkRadio.SetSelected(configs.DefaultNetwork)
 	selectedNetwork = types.NetworkSignet
@@ -238,11 +246,15 @@ Choose the Bitcoin network for your wallet:
 	s.window.Resize(fyne.NewSize(600, 500))
 }
 
-func (s *SetupWizard) createWalletFromMnemonic(mnemonic string, network types.Network) {
+func (s *SetupWizard) createWalletFromMnemonic(
+	mnemonic string, network types.Network,
+) {
 	// Create wallet from mnemonic with the selected network
 	walletInstance, err := wallet.NewFromMnemonic(mnemonic, network)
 	if err != nil {
-		dialog.ShowError(fmt.Errorf("failed to create wallet from mnemonic: %v", err), s.window)
+		dialog.ShowError(
+			fmt.Errorf("failed to create wallet from mnemonic: %v", err), s.window,
+		)
 		return
 	}
 
@@ -266,9 +278,12 @@ func (s *SetupWizard) showConfigurationDialog(manager *controller.Manager) {
 		height, err := configs.GetCurrentBlockHeight(manager.Wallet.Network)
 		if err == nil {
 			birthHeightEntry.SetText(fmt.Sprintf("%d", height))
-			logging.L.Debug().Uint64("height", height).Msg("prefilled birth height from blockchain")
+			logging.L.Debug().
+				Uint64("height", height).
+				Msg("prefilled birth height from blockchain")
 		} else {
-			logging.L.Warn().Err(err).Msg("failed to fetch current block height")
+			logging.L.Warn().Err(err).
+				Msg("failed to fetch current block height")
 		}
 	}()
 

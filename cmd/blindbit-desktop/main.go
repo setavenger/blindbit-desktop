@@ -7,6 +7,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/driver/desktop"
 	"github.com/rs/zerolog"
 
 	"github.com/setavenger/blindbit-desktop/internal/configs"
@@ -138,6 +139,25 @@ func main() {
 	if walletManager != nil {
 		defer storage.SavePlain(walletManager.DataDir, walletManager)
 	}
+
+	// Tray settings
+	if desk, ok := myApp.(desktop.App); ok {
+		logging.L.Debug().Msg("Is desktop app")
+		m := fyne.NewMenu("BlindBit",
+			fyne.NewMenuItem("Show", func() {
+				mainWindow.Show()
+			}))
+		desk.SetSystemTrayMenu(m)
+		// desk.SetSystemTrayIcon(fyne.CurrentApp().Icon())
+		if myApp.Metadata().Icon != nil {
+			logging.L.Trace().Msg("have metadata icon")
+			desk.SetSystemTrayIcon(myApp.Metadata().Icon) // tray
+		} else {
+			logging.L.Trace().Msg("failed to find metadata icon")
+		}
+	}
+
+	mainWindow.SetCloseIntercept(func() { mainWindow.Hide() })
 
 	// Show and run the application
 	mainWindow.ShowAndRun()

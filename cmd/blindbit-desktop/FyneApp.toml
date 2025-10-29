@@ -1,0 +1,8 @@
+Website = "https://github.com/blindbitbtc"
+
+[Details]
+Icon = "Icon.png"
+Name = "BlindBit"
+ID = "com.setavenger.blindbit-desktop"
+Version = "0.1.0"
+Build = 1
