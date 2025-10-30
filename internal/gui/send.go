@@ -10,6 +10,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/setavenger/blindbit-desktop/internal/controller"
@@ -197,39 +198,38 @@ func (g *MainGUI) showTransactionDetails(
 		Uint64("feeRate", feeRate).
 		Msg("transaction details")
 
-	detailsText := fmt.Sprintf(`
-Transaction Details:
-
-Recipients: %d
-Net Amount: %s
-Fee: %s
-Fee Rate: %.2f sat/vB
-Total: %s
-
-Transaction prepared successfully
-`,
-		len(recipients),
+	// Build a clean two-column summary grid
+	labels := []string{"Net Amount:", "Fee:", "Fee Rate:", "Total:"}
+	values := []string{
 		FormatSatoshi(netAmount),
 		FormatSatoshiUint64(fee),
-		feeRateFloat,
-		FormatSatoshiUint64(totalSent),
-	)
+		fmt.Sprintf("%.2f sat/vB", feeRateFloat),
+		FormatSatoshiUint64(totalSent + fee),
+	}
 
-	detailsLabel := widget.NewLabel(detailsText)
-	detailsLabel.Wrapping = fyne.TextWrapWord
+	var gridObjects []fyne.CanvasObject
+	for i := range labels {
+		left := widget.NewLabel(labels[i])
+		left.Alignment = fyne.TextAlignLeading
+		right := widget.NewLabel(values[i])
+		right.Alignment = fyne.TextAlignTrailing
+		gridObjects = append(gridObjects, left, right)
+	}
+
+	title := widget.NewLabelWithStyle("Transaction Details", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 
 	confirmBtn := widget.NewButton("Confirm & Broadcast", func() {
 		g.broadcastTransaction(txMetadata, recipients)
 	})
 
-	cancelBtn := widget.NewButton("Cancel", func() {
-		// Close dialog
-	})
+	grid := container.NewGridWithColumns(2, gridObjects...)
 
 	content := container.NewVBox(
-		detailsLabel,
+		title,
 		widget.NewSeparator(),
-		container.NewHBox(cancelBtn, confirmBtn),
+		grid,
+		widget.NewSeparator(),
+		container.NewHBox(layout.NewSpacer(), confirmBtn, layout.NewSpacer()),
 	)
 
 	dialog.ShowCustom("Transaction Preview", "Close", content, g.window)
