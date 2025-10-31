@@ -6,11 +6,13 @@ A modern desktop application that combines the functionality of blindbit-scan an
 
 - **Wallet Management**: Create new wallets with generated seed phrases or import existing ones
 - **Address Generation**: Generate Silent Payment addresses for receiving Bitcoin
-- **UTXO Scanning**: Scan the blockchain for your wallet's UTXOs
+- **UTXO Scanning**: Scan for your wallet's UTXOs
 - **Transaction Sending**: Send Bitcoin to regular and Silent Payment addresses
 - **Balance Tracking**: View your wallet balance and transaction history
-- **Cross-Platform**: Works on Windows, macOS, and Linux
+- **Cross-Platform**: Works on macOS and Linux (Windows?)
 - **Lightweight**: Built with Fyne GUI framework, no browser required
+
+*Windows should technically work but I cannot test it. If it doesn't, you could help me debug issues :)
 
 ## Prerequisites
 
@@ -55,54 +57,62 @@ To use a custom data directory:
 go install github.com/setavenger/blindbit-desktop/cmd/blindbit-desktop@latest
 ```
 
-## Usage
+## Packaging
 
-### First Time Setup
+To package the application for distribution, use the Fyne package tool.
 
-1. Launch the application
-2. Click "Create New Wallet"
-3. Choose "Generate New Seed" to create a new wallet
-4. **IMPORTANT**: Write down the generated seed phrase and keep it safe
-5. Click "Create Wallet" to proceed
+**Native compilation** (building on the same platform):
+- No `-os` flag needed
 
-### Importing Existing Wallet
+**Cross-compilation** (building on a different platform):
+- Use the `-os` flag to specify the target platform
 
-1. Click "Create New Wallet"
-2. Choose "Enter Existing Seed"
-3. Enter your 24-word seed phrase
-4. Click "Import" to load your wallet
+### Examples
 
-### Main Interface
+#### Native Packaging
 
-The application has four main tabs:
+```bash
+# macOS (on macOS)
+fyne package -src ./cmd/blindbit-desktop
 
-#### Overview Tab
-- View your wallet address and balance
-- See all UTXOs (Unspent Transaction Outputs)
-- Start/stop blockchain scanning
-- Refresh UTXO list
+# Windows (on Windows)
+fyne package -src ./cmd/blindbit-desktop
 
-#### Send Tab
-- Enter recipient address
-- Specify amount in satoshis
-- Set fee rate
-- Send transactions
+# Linux (on Linux)
+fyne package -src ./cmd/blindbit-desktop
+```
 
-#### Receive Tab
-- Display your wallet address
-- Copy address to clipboard
+#### Cross-Compilation
 
-#### Settings Tab
-- Configure network (testnet/mainnet/signet)
-- Other wallet settings
+```bash
+# macOS (from Linux/Windows)
+fyne package -src ./cmd/blindbit-desktop -os darwin
+
+# Windows (from macOS/Linux)
+fyne package -src ./cmd/blindbit-desktop -os windows
+
+# Linux (from macOS/Windows)
+fyne package -src ./cmd/blindbit-desktop -os linux
+```
+
+For a complete packaging script example, see `package-macos.sh`.
+
+**Note**: Packaging requires the Fyne CLI tool. Install it with:
+
+```bash
+go install fyne.io/fyne/v2/cmd/fyne@latest
+```
 
 ## Configuration
 
-The application stores configuration in `~/.blindbit-desktop/blindbit.toml` by default, or in `<datadir>/blindbit.toml` when `--datadir` is provided. Default settings include:
+The application stores wallet data in `~/.blindbit-desktop/wallet.dat` by default, or in `<datadir>/wallet.dat` when `--datadir` is provided.
 
-- Network: testnet
-- Oracle URL: https://silentpayments.dev/blindbit/mainnet
-- HTTP Port: 8080
+Default settings:
+- **Network**: signet
+- **Oracle Address** (gRPC):
+  - Mainnet: `oracle.setor.dev`
+  - Signet: `signet.oracle.setor.dev`
+- **TLS**: Enabled by default
 
 ## Support
 
