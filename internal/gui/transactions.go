@@ -8,6 +8,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/setavenger/blindbit-lib/types"
@@ -128,32 +129,72 @@ Click on a transaction to view details.
 func (g *MainGUI) showTransactionHistoryDetails(tx *wallet.TxItem) {
 	txidHex := hex.EncodeToString(tx.TxID[:])
 
-	detailsText := fmt.Sprintf(`
-Transaction Details:
+	status := "Pending"
+	if tx.ConfirmHeight > 0 {
+		status = "Confirmed"
+	}
 
-Transaction ID: %s
-Block Height: %s
-Net Amount: %s
-Fee: %s
-Status: %s
+	// TXID: Full 64 hex chars, monospace, allow word wrap (no truncation)
+	txidLabel := widget.NewLabel("Transaction ID:")
+	txidValue := widget.NewLabel(txidHex)
+	txidValue.TextStyle.Monospace = true
+	txidValue.Wrapping = fyne.TextWrapBreak // Break anywhere so long hex fits without scrolling
 
-Click "View in Explorer" to see this transaction on mempool.space
-`,
-		txidHex,
-		FormatNumber(int64(tx.ConfirmHeight)),
-		FormatSatoshi(int64(tx.NetAmount())),
-		FormatSatoshi(int64(tx.Fees())),
-		func() string {
-			if tx.ConfirmHeight > 0 {
-				return "Confirmed"
-			}
-			return "Pending"
-		}(),
-	)
+	// Transaction info (single-line labels for compactness)
+	heightLine := widget.NewLabel("Block Height: " + FormatNumber(int64(tx.ConfirmHeight)))
+	amountLine := widget.NewLabel("Total Amount: " + FormatSatoshi(int64(tx.NetAmount())))
+	feeLine := widget.NewLabel("Fee: " + FormatSatoshi(int64(tx.Fees())))
+	statusLine := widget.NewLabel("Status: " + status)
 
-	detailsLabel := widget.NewLabel(detailsText)
-	detailsLabel.Wrapping = fyne.TextWrapWord
+	// TODO: Take from TX History and
+	// show both wallet internal and external UTXOs
+	// // Find output UTXOs (belonging to wallet from this transaction)
+	// var outputUTXOItems []fyne.CanvasObject
+	// for _, utxo := range g.manager.Wallet.GetUTXOs() {
+	// 	if hex.EncodeToString(utxo.Txid[:]) == txidHex {
+	// 		utxoLine := widget.NewLabel(fmt.Sprintf("  vout %d — %s", utxo.Vout, FormatSatoshi(int64(utxo.Amount))))
+	// 		outputUTXOItems = append(outputUTXOItems, utxoLine)
+	// 	}
+	// }
 
+	// Try to find input UTXOs (sent/spent in this transaction)
+	// var inputUTXOItems []fyne.CanvasObject
+	// Try accessing input UTXOs via TxItem if available (check various patterns)
+	// Note: Since TxItem comes from blindbit-lib, exact structure may vary
+	// For now, we'll show output UTXOs which are definitive
+	// Input UTXOs would require access to the original wire.MsgTx or stored input data
+	// TODO: Implement input UTXO lookup when TxItem structure supports it
+
+	// Build content sections
+	contentItems := []fyne.CanvasObject{
+		widget.NewLabelWithStyle("Transaction Details", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		widget.NewSeparator(),
+		txidLabel,
+		txidValue,
+		widget.NewSeparator(),
+		heightLine,
+		amountLine,
+		feeLine,
+		statusLine,
+	}
+
+	// Add output UTXOs section if any
+	// if len(outputUTXOItems) > 0 {
+	// 	contentItems = append(contentItems, widget.NewSeparator())
+	// 	outputTitle := widget.NewLabelWithStyle("Outputs to your wallet", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	// 	contentItems = append(contentItems, outputTitle)
+	// 	contentItems = append(contentItems, outputUTXOItems...)
+	// }
+
+	// Add input UTXOs section if any
+	// if len(inputUTXOItems) > 0 {
+	// 	contentItems = append(contentItems, widget.NewSeparator())
+	// 	inputTitle := widget.NewLabelWithStyle("Inputs sent (UTXOs spent)", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	// 	contentItems = append(contentItems, inputTitle)
+	// 	contentItems = append(contentItems, inputUTXOItems...)
+	// }
+
+	// Buttons
 	copyBtn := widget.NewButton("Copy TXID", func() {
 		g.copyTxidToClipboard(txidHex)
 	})
@@ -162,13 +203,20 @@ Click "View in Explorer" to see this transaction on mempool.space
 		g.openInExplorer(txidHex)
 	})
 
-	content := container.NewVBox(
-		detailsLabel,
+	innerContainer := container.NewHBox(copyBtn, explorerBtn)
+	buttonLineContainer := container.NewHBox(innerContainer)
+	buttonLineContainer.Layout = layout.NewCenterLayout()
+
+	contentItems = append(contentItems,
 		widget.NewSeparator(),
-		container.NewHBox(copyBtn, explorerBtn),
+		buttonLineContainer,
 	)
 
-	dialog.ShowCustom("Transaction Details", "Close", content, g.window)
+	content := container.NewVBox(contentItems...)
+	// Increase dialog width so everything fits comfortably
+	d := dialog.NewCustom("Transaction Details", "Close", content, g.window)
+	d.Resize(fyne.NewSize(680, content.MinSize().Height))
+	d.Show()
 }
 
 func (g *MainGUI) copyTxidToClipboard(text string) {
