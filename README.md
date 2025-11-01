@@ -2,6 +2,13 @@
 
 A modern desktop application that combines the functionality of blindbit-scan and blindbit-wallet-cli into a single, user-friendly GUI application for managing Bitcoin Silent Payment (BIP 352) wallets.
 
+> [!WARNING]
+> **This software is EXPERIMENTAL and in ALPHA stage.**
+> 
+> - This software is still under active development and may contain bugs
+> - Features may change or break between versions
+> - Always backup your wallet seed phrase and test with small amounts first
+
 ## Features
 
 - **Wallet Management**: Create new wallets with generated seed phrases or import existing ones
