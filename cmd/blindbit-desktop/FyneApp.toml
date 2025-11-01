@@ -1,7 +1,7 @@
 Website = "https://github.com/blindbitbtc"
 
 [Details]
-  Icon = "Icon.png"
+  Icon = "icon.png"
   Name = "BlindBit"
   ID = "com.setavenger.blindbit"
   Version = "0.1.0"

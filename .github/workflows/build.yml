@@ -1,0 +1,303 @@
+name: Build and Package
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  GO_VERSION: '1.24.1'
+  FYNE_VERSION: 'v2.5.5'
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }}-${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Windows
+          - os: windows-latest
+            arch: amd64
+            goos: windows
+            goarch: amd64
+            suffix: .exe
+            package_cmd: package -os windows -release -sourceDir ./cmd/blindbit-desktop
+            artifact_name: BlindBit-windows-amd64
+          
+          # Linux
+          - os: ubuntu-latest
+            arch: amd64
+            goos: linux
+            goarch: amd64
+            suffix: 
+            package_cmd: package -os linux -release -sourceDir ./cmd/blindbit-desktop
+            artifact_name: BlindBit-linux-amd64
+          
+          - os: ubuntu-latest
+            arch: arm64
+            goos: linux
+            goarch: arm64
+            suffix:
+            package_cmd: package -os linux -release -sourceDir ./cmd/blindbit-desktop
+            artifact_name: BlindBit-linux-arm64
+          
+          # macOS
+          # Note: macOS Intel (amd64) builds on ARM runners may require special handling
+          # Fyne may not fully support cross-compilation for macOS Intel on ARM
+          - os: macos-14
+            arch: amd64
+            goos: darwin
+            goarch: amd64
+            suffix:
+            package_cmd: package -os darwin -release -sourceDir ./cmd/blindbit-desktop
+            artifact_name: BlindBit-macos-amd64
+          
+          - os: macos-14
+            arch: arm64
+            goos: darwin
+            goarch: arm64
+            suffix:
+            package_cmd: package -os darwin -release -sourceDir ./cmd/blindbit-desktop
+            artifact_name: BlindBit-macos-arm64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Install Fyne CLI
+        if: matrix.goos != 'linux' || matrix.goarch != 'arm64'
+        run: |
+          go install fyne.io/fyne/v2/cmd/fyne@${{ env.FYNE_VERSION }}
+        env:
+          PATH: ${{ env.PATH }}:$HOME/go/bin
+
+      - name: Install fyne-cross (for Linux ARM64)
+        if: matrix.goos == 'linux' && matrix.goarch == 'arm64'
+        run: |
+          go install github.com/fyne-io/fyne-cross@latest
+        env:
+          PATH: ${{ env.PATH }}:$HOME/go/bin
+
+      # macOS specific setup
+      - name: Install macOS dependencies
+        if: matrix.goos == 'darwin'
+        run: |
+          brew install pkg-config glfw || true
+
+      # Linux specific setup
+      - name: Install Linux dependencies
+        if: matrix.goos == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-dev xorg-dev libgtk-3-dev libx11-dev libx11-xcb-dev libxcb-render-util0-dev libxcb-render0-dev libxcb-xkb-dev libxcb-icccm4-dev libxcb-image0-dev libxcb-keysyms1-dev libxcb-randr0-dev libxcb-shape0-dev libxcb-sync-dev libxcb-xfixes0-dev libxcb-xinerama0-dev libxcb-dri3-dev libxcb-cursor-dev libxkbcommon-dev libxkbcommon-x11-dev gcc g++
+
+      # Linux ARM64 uses fyne-cross (via Docker), no manual cross-compilation setup needed
+
+      # Windows specific setup
+      - name: Install Windows dependencies
+        if: matrix.goos == 'windows'
+        run: |
+          choco install -y mingw || echo "Mingw install failed, continuing..."
+
+      - name: Set up Go environment
+        run: |
+          echo "GOOS=${{ matrix.goos }}" >> $GITHUB_ENV
+          echo "GOARCH=${{ matrix.goarch }}" >> $GITHUB_ENV
+          echo "CGO_ENABLED=1" >> $GITHUB_ENV
+
+      - name: Build and Package (Linux ARM64 with fyne-cross)
+        if: matrix.goos == 'linux' && matrix.goarch == 'arm64'
+        run: |
+          export PATH="$PATH:$HOME/go/bin"
+          FYNE_CROSS_CMD="$HOME/go/bin/fyne-cross"
+          if [ ! -f "$FYNE_CROSS_CMD" ]; then
+            echo "Error: fyne-cross binary not found at $FYNE_CROSS_CMD"
+            exit 1
+          fi
+          echo "Using fyne-cross for Linux ARM64 cross-compilation"
+          # fyne-cross syntax: fyne-cross <os> [options] [package]
+          # Note: -release flag may not be supported, fyne-cross builds release packages by default
+          echo "Running: $FYNE_CROSS_CMD linux -arch arm64 -output BlindBit ./cmd/blindbit-desktop"
+          $FYNE_CROSS_CMD linux -arch arm64 -output BlindBit ./cmd/blindbit-desktop
+          echo "Build completed. Files created:"
+          ls -lah . || true
+          if [ -d "fyne-cross/dist" ]; then
+            echo "fyne-cross output directory contents:"
+            ls -lah fyne-cross/dist/ || true
+          fi
+        shell: bash
+
+      - name: Build and Package (Native builds)
+        if: matrix.goos != 'linux' || matrix.goarch != 'arm64'
+        run: |
+          export PATH="$PATH:$HOME/go/bin"
+          # Verify fyne is available
+          FYNE_CMD="$HOME/go/bin/fyne"
+          if [ ! -f "$FYNE_CMD" ]; then
+            echo "Error: fyne binary not found at $FYNE_CMD"
+            exit 1
+          fi
+          # Debug: Check current directory and sourceDir before building
+          echo "Current directory: $(pwd)"
+          echo "Source directory contents:"
+          ls -lah ./cmd/blindbit-desktop/ || echo "sourceDir not found"
+          # Note: macOS Intel cross-compilation may fail on ARM runners
+          # If this fails, consider building on an Intel Mac or using a different approach
+          echo "Running: $FYNE_CMD ${{ matrix.package_cmd }}"
+          $FYNE_CMD ${{ matrix.package_cmd }} || {
+            if [ "${{ matrix.goos }}" = "darwin" ] && [ "${{ matrix.goarch }}" = "amd64" ]; then
+              echo "Warning: macOS Intel build may not be supported on ARM runners"
+              exit 0
+            else
+              exit 1
+            fi
+          }
+          # Debug: Check what was created
+          echo "Files in current directory after first build:"
+          ls -lah . || true
+          echo "Files in sourceDir after first build:"
+          ls -lah ./cmd/blindbit-desktop/ || true
+          # Windows: According to Fyne docs, Windows packaging requires two builds
+          # Run again if on Windows to ensure icon/metadata is embedded
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            echo "Running second build for Windows to embed icon and metadata..."
+            $FYNE_CMD ${{ matrix.package_cmd }} || echo "Second build completed with warnings"
+            echo "Files after second build:"
+            ls -lah . || true
+            ls -lah ./cmd/blindbit-desktop/ || true
+          fi
+        shell: bash
+        continue-on-error: ${{ matrix.goos == 'darwin' && matrix.goarch == 'amd64' }}
+
+      - name: Create release artifacts directory
+        run: mkdir -p release-artifacts
+        shell: bash
+
+      # Windows: Copy executable
+      - name: Package Windows executable
+        if: matrix.goos == 'windows'
+        run: |
+          echo "Looking for build artifacts..."
+          echo "Current directory: $(pwd)"
+          ls -lah
+          echo "Checking sourceDir for exe:"
+          ls -lah ./cmd/blindbit-desktop/ || true
+          # Check multiple possible locations
+          if [ -f "BlindBit.exe" ]; then
+            mv BlindBit.exe release-artifacts/BlindBit-${{ matrix.goos }}-${{ matrix.goarch }}.exe
+          elif [ -f "./cmd/blindbit-desktop/BlindBit.exe" ]; then
+            mv ./cmd/blindbit-desktop/BlindBit.exe release-artifacts/BlindBit-${{ matrix.goos }}-${{ matrix.goarch }}.exe
+          else
+            echo "Warning: BlindBit.exe not found. Searching recursively:"
+            find . -type f -name "*.exe" -ls || true
+            find . -type f -name "*blindbit*" -ls || true
+            find . -type f -name "*BlindBit*" -ls || true
+          fi
+        shell: bash
+
+      # Linux: Copy tar archive (fyne package creates .tar.xz or .tar.gz, fyne-cross uses dist/)
+      - name: Package Linux tar archive
+        if: matrix.goos == 'linux'
+        run: |
+          echo "Looking for build artifacts..."
+          ls -lah
+          # Check fyne-cross output directory (for ARM64 builds)
+          if [ "${{ matrix.goarch }}" = "arm64" ] && [ -d "fyne-cross/dist" ]; then
+            echo "Found fyne-cross output directory"
+            ls -lah fyne-cross/dist/
+            # fyne-cross typically creates tar.xz files
+            find fyne-cross/dist -name "*.tar.xz" -exec mv {} release-artifacts/BlindBit-${{ matrix.goos }}-${{ matrix.goarch }}.tar.xz \; || true
+            find fyne-cross/dist -name "*.tar.gz" -exec mv {} release-artifacts/BlindBit-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz \; || true
+          fi
+          # Check standard locations (for native builds)
+          if [ -f "BlindBit.tar.xz" ]; then
+            mv BlindBit.tar.xz release-artifacts/BlindBit-${{ matrix.goos }}-${{ matrix.goarch }}.tar.xz
+          elif [ -f "BlindBit.tar.gz" ]; then
+            mv BlindBit.tar.gz release-artifacts/BlindBit-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
+          elif [ -f "BlindBit.AppImage" ]; then
+            mv BlindBit.AppImage release-artifacts/BlindBit-${{ matrix.goos }}-${{ matrix.goarch }}.AppImage
+            chmod +x release-artifacts/BlindBit-${{ matrix.goos }}-${{ matrix.goarch }}.AppImage
+          elif [ -f "blindbit-desktop" ]; then
+            mv blindbit-desktop release-artifacts/BlindBit-${{ matrix.goos }}-${{ matrix.goarch }}
+            chmod +x release-artifacts/BlindBit-${{ matrix.goos }}-${{ matrix.goarch }}
+          else
+            echo "Warning: No expected artifacts found. Searching all directories:"
+            find . -type f -name "*.tar.*" -ls || true
+            find . -type f -name "*.AppImage" -ls || true
+            find . -type f -name "*blindbit*" -ls || true
+          fi
+        shell: bash
+
+      # macOS: Copy .app bundle and create .dmg
+      - name: Package macOS app
+        if: matrix.goos == 'darwin'
+        run: |
+          if [ -d "BlindBit.app" ]; then
+            # Create zip archive of .app bundle
+            zip -r release-artifacts/BlindBit-${{ matrix.goos }}-${{ matrix.goarch }}.zip BlindBit.app
+            
+            # Optionally create DMG (requires create-dmg or fyne release)
+            # ${{ env.GITHUB_WORKSPACE }}/go/bin/fyne release -os darwin -sourceDir ./cmd/blindbit-desktop
+            # if [ -f "BlindBit.dmg" ]; then
+            #   mv BlindBit.dmg release-artifacts/BlindBit-${{ matrix.goos }}-${{ matrix.goarch }}.dmg
+            # fi
+          fi
+        shell: bash
+
+      - name: List artifacts
+        run: ls -lah release-artifacts/
+        shell: bash
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: release-artifacts/*
+          retention-days: 30
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+          find ./artifacts -type f \( -name "*.exe" -o -name "*.AppImage" -o -name "*.zip" -o -name "*.dmg" -o ! -name "*.txt" \) -exec cp {} release-assets/ \;
+
+      - name: Create checksums
+        run: |
+          cd release-assets
+          for file in *; do
+            sha256sum "$file" > "$file.sha256"
+          done
+          ls -lah
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
