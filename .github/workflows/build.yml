@@ -85,8 +85,8 @@ jobs:
         env:
           PATH: ${{ env.PATH }}:$HOME/go/bin
 
-      - name: Install fyne-cross (for Linux ARM64)
-        if: matrix.goos == 'linux' && matrix.goarch == 'arm64'
+      - name: Install fyne-cross (for cross-compilation builds)
+        if: (matrix.goos == 'linux' && matrix.goarch == 'arm64') || (matrix.goos == 'darwin' && matrix.goarch == 'arm64')
         run: |
           go install github.com/fyne-io/fyne-cross@latest
         env:
@@ -141,8 +141,28 @@ jobs:
           fi
         shell: bash
 
+      - name: Build and Package (macOS ARM64 with fyne-cross)
+        if: matrix.goos == 'darwin' && matrix.goarch == 'arm64'
+        run: |
+          export PATH="$PATH:$HOME/go/bin"
+          FYNE_CROSS_CMD="$HOME/go/bin/fyne-cross"
+          if [ ! -f "$FYNE_CROSS_CMD" ]; then
+            echo "Error: fyne-cross binary not found at $FYNE_CROSS_CMD"
+            exit 1
+          fi
+          echo "Using fyne-cross for macOS ARM64"
+          echo "Running: $FYNE_CROSS_CMD darwin -arch arm64 -output BlindBit ./cmd/blindbit-desktop"
+          $FYNE_CROSS_CMD darwin -arch arm64 -output BlindBit ./cmd/blindbit-desktop
+          echo "Build completed. Files created:"
+          ls -lah . || true
+          if [ -d "fyne-cross/dist" ]; then
+            echo "fyne-cross output directory contents:"
+            ls -lah fyne-cross/dist/ || true
+          fi
+        shell: bash
+
       - name: Build and Package (Native builds)
-        if: matrix.goos != 'linux' || matrix.goarch != 'arm64'
+        if: (matrix.goos != 'linux' || matrix.goarch != 'arm64') && (matrix.goos != 'darwin' || matrix.goarch != 'arm64')
         run: |
           export PATH="$PATH:$HOME/go/bin"
           # Verify fyne is available
@@ -246,7 +266,20 @@ jobs:
       - name: Package macOS app
         if: matrix.goos == 'darwin'
         run: |
-          if [ -d "BlindBit.app" ]; then
+          echo "Looking for macOS build artifacts..."
+          ls -lah
+          # Check fyne-cross output directory (for ARM64 builds)
+          if [ "${{ matrix.goarch }}" = "arm64" ] && [ -d "fyne-cross/dist" ]; then
+            echo "Found fyne-cross output directory"
+            ls -lah fyne-cross/dist/
+            # Find .app bundle in fyne-cross output
+            if find fyne-cross/dist -name "*.app" -type d | head -1 | xargs -I {} sh -c 'zip -r release-artifacts/BlindBit-${{ matrix.goos }}-${{ matrix.goarch }}.zip {}'; then
+              echo "Successfully packaged .app from fyne-cross"
+            else
+              echo "No .app found in fyne-cross/dist"
+            fi
+          # Check standard location (for native builds)
+          elif [ -d "BlindBit.app" ]; then
             # Create zip archive of .app bundle
             zip -r release-artifacts/BlindBit-${{ matrix.goos }}-${{ matrix.goarch }}.zip BlindBit.app
             
@@ -255,6 +288,9 @@ jobs:
             # if [ -f "BlindBit.dmg" ]; then
             #   mv BlindBit.dmg release-artifacts/BlindBit-${{ matrix.goos }}-${{ matrix.goarch }}.dmg
             # fi
+          else
+            echo "Warning: No .app bundle found. Searching all directories:"
+            find . -type d -name "*.app" -ls || true
           fi
         shell: bash
 
