@@ -2,6 +2,8 @@ name: Build and Package
 
 on:
   push:
+    branches:
+      - alpha
     tags:
       - 'v*'
   workflow_dispatch:
@@ -85,8 +87,8 @@ jobs:
         env:
           PATH: ${{ env.PATH }}:$HOME/go/bin
 
-      - name: Install fyne-cross (for cross-compilation builds)
-        if: (matrix.goos == 'linux' && matrix.goarch == 'arm64') || (matrix.goos == 'darwin' && matrix.goarch == 'arm64')
+      - name: Install fyne-cross (for Linux ARM64 only)
+        if: matrix.goos == 'linux' && matrix.goarch == 'arm64'
         run: |
           go install github.com/fyne-io/fyne-cross@latest
         env:
@@ -141,28 +143,8 @@ jobs:
           fi
         shell: bash
 
-      - name: Build and Package (macOS ARM64 with fyne-cross)
-        if: matrix.goos == 'darwin' && matrix.goarch == 'arm64'
-        run: |
-          export PATH="$PATH:$HOME/go/bin"
-          FYNE_CROSS_CMD="$HOME/go/bin/fyne-cross"
-          if [ ! -f "$FYNE_CROSS_CMD" ]; then
-            echo "Error: fyne-cross binary not found at $FYNE_CROSS_CMD"
-            exit 1
-          fi
-          echo "Using fyne-cross for macOS ARM64"
-          echo "Running: $FYNE_CROSS_CMD darwin -arch arm64 -output BlindBit ./cmd/blindbit-desktop"
-          $FYNE_CROSS_CMD darwin -arch arm64 -output BlindBit ./cmd/blindbit-desktop
-          echo "Build completed. Files created:"
-          ls -lah . || true
-          if [ -d "fyne-cross/dist" ]; then
-            echo "fyne-cross output directory contents:"
-            ls -lah fyne-cross/dist/ || true
-          fi
-        shell: bash
-
       - name: Build and Package (Native builds)
-        if: (matrix.goos != 'linux' || matrix.goarch != 'arm64') && (matrix.goos != 'darwin' || matrix.goarch != 'arm64')
+        if: matrix.goos != 'linux' || matrix.goarch != 'arm64'
         run: |
           export PATH="$PATH:$HOME/go/bin"
           # Verify fyne is available
@@ -175,6 +157,14 @@ jobs:
           echo "Current directory: $(pwd)"
           echo "Source directory contents:"
           ls -lah ./cmd/blindbit-desktop/ || echo "sourceDir not found"
+          # Debug: Show Go environment for macOS builds
+          if [ "${{ matrix.goos }}" = "darwin" ]; then
+            echo "=== Go Environment for macOS Build ==="
+            echo "GOOS=${{ matrix.goos }}"
+            echo "GOARCH=${{ matrix.goarch }}"
+            go env GOOS GOARCH || true
+            echo "CGO_ENABLED=$CGO_ENABLED"
+          fi
           # Note: macOS Intel cross-compilation may fail on ARM runners
           # If this fails, consider building on an Intel Mac or using a different approach
           echo "Running: $FYNE_CMD ${{ matrix.package_cmd }}"
@@ -262,24 +252,75 @@ jobs:
           fi
         shell: bash
 
+      # macOS: Inspect .app bundle before packaging
+      - name: Inspect macOS app bundle
+        if: matrix.goos == 'darwin'
+        run: |
+          if [ -d "BlindBit.app" ]; then
+            echo "=== Inspecting BlindBit.app ==="
+            echo ""
+            echo "=== Bundle Structure ==="
+            find BlindBit.app -type f -exec ls -lh {} \;
+            echo ""
+            echo "=== Binary Architecture ==="
+            BINARY="BlindBit.app/Contents/MacOS/blindbit-desktop"
+            if [ -f "$BINARY" ]; then
+              file "$BINARY"
+              echo ""
+              echo "=== Lipo info (architectures) ==="
+              lipo -info "$BINARY" 2>&1 || echo "lipo not available or binary not a fat binary"
+              echo ""
+              echo "=== Code Signing Status ==="
+              codesign -dvv "$BINARY" 2>&1 || echo "Not signed"
+              codesign -dvv "BlindBit.app" 2>&1 || echo "App bundle not signed"
+              echo ""
+              echo "=== Note: Code Signing ==="
+              echo "This app is adhoc-signed (not signed with a developer certificate)."
+              echo "macOS may show 'damaged file' warning on first launch."
+              echo "Users can bypass by: right-click > Open, or remove quarantine: xattr -d com.apple.quarantine BlindBit.app"
+              echo ""
+              echo "=== Info.plist Contents ==="
+              if [ -f "BlindBit.app/Contents/Info.plist" ]; then
+                cat "BlindBit.app/Contents/Info.plist"
+              fi
+              echo ""
+              echo "=== Binary Size ==="
+              ls -lh "$BINARY"
+              echo ""
+              echo "=== Linked Libraries and Dependencies ==="
+              otool -L "$BINARY" 2>&1 || echo "otool not available"
+              echo ""
+              echo "=== Check minimum macOS version ==="
+              otool -l "$BINARY" | grep -A 2 LC_VERSION_MIN_MACOSX || otool -l "$BINARY" | grep -A 2 LC_BUILD_VERSION || echo "Could not determine minimum version"
+              echo ""
+              echo "=== Binary Verification (try to load) ==="
+              # Try to verify the binary can be loaded (this will catch major issues)
+              # Use a timeout in case it tries to run
+              # Also try with direct binary execution (not through app bundle)
+              cd "$(dirname "$BINARY")"
+              ./blindbit-desktop --version 2>&1 || ./blindbit-desktop -version 2>&1 || ./blindbit-desktop -h 2>&1 || echo "Binary execution test completed (may have exited, timed out, or needs GUI)"
+              cd - > /dev/null
+              echo ""
+              echo "=== Check for missing frameworks ==="
+              otool -l "$BINARY" | grep -A 2 LC_LOAD | head -20 || echo "Could not check load commands"
+              echo ""
+              echo "=== Verify binary integrity ==="
+              # Check if binary can be read and is valid Mach-O
+              strings "$BINARY" | head -5 || echo "Could not read strings from binary"
+            else
+              echo "ERROR: Binary not found at $BINARY"
+            fi
+          fi
+        shell: bash
+
       # macOS: Copy .app bundle and create .dmg
       - name: Package macOS app
         if: matrix.goos == 'darwin'
         run: |
           echo "Looking for macOS build artifacts..."
           ls -lah
-          # Check fyne-cross output directory (for ARM64 builds)
-          if [ "${{ matrix.goarch }}" = "arm64" ] && [ -d "fyne-cross/dist" ]; then
-            echo "Found fyne-cross output directory"
-            ls -lah fyne-cross/dist/
-            # Find .app bundle in fyne-cross output
-            if find fyne-cross/dist -name "*.app" -type d | head -1 | xargs -I {} sh -c 'zip -r release-artifacts/BlindBit-${{ matrix.goos }}-${{ matrix.goarch }}.zip {}'; then
-              echo "Successfully packaged .app from fyne-cross"
-            else
-              echo "No .app found in fyne-cross/dist"
-            fi
           # Check standard location (for native builds)
-          elif [ -d "BlindBit.app" ]; then
+          if [ -d "BlindBit.app" ]; then
             # Create zip archive of .app bundle
             zip -r release-artifacts/BlindBit-${{ matrix.goos }}-${{ matrix.goarch }}.zip BlindBit.app
             
