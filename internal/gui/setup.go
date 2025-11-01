@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -85,23 +86,69 @@ func (s *SetupWizard) showWalletTypeDialog() {
 		return
 	}
 
-	// Display the generated mnemonic for the user to save
-	mnemonicText := widget.NewRichTextFromMarkdown(fmt.Sprintf(`
+	// Title and instructions
+	titleText := widget.NewRichTextFromMarkdown(`
 # Your New Wallet Seed Phrase
 
 **IMPORTANT**: Write down these 24 words in the exact order shown below. 
 This is your only way to recover your wallet if you lose access to this device.
 
 **Store them safely and never share them with anyone!**
+`)
+	titleText.Wrapping = fyne.TextWrapWord
 
-## Your Seed Phrase:
+	// Format mnemonic with numbers for better visual distinction
+	words := strings.Fields(mnemonic)
+	var formattedLines []string
+	for i := 0; i < len(words); i += 4 {
+		var lineParts []string
+		for j := 0; j < 4 && i+j < len(words); j++ {
+			wordNum := i + j + 1
+			lineParts = append(lineParts, fmt.Sprintf("%2d. %-12s", wordNum, words[i+j]))
+		}
+		formattedLines = append(formattedLines, strings.Join(lineParts, "  "))
+	}
+	formattedMnemonic := strings.Join(formattedLines, "\n")
 
-%s
+	// Display formatted mnemonic in a styled label with monospace font
+	mnemonicDisplay := widget.NewLabel(formattedMnemonic)
+	mnemonicDisplay.TextStyle.Monospace = true
+	mnemonicDisplay.Wrapping = fyne.TextWrapOff
+	mnemonicDisplay.Alignment = fyne.TextAlignLeading
 
+	// Notification label for copy feedback
+	copyNotificationLabel := widget.NewLabel("")
+	copyNotificationLabel.Alignment = fyne.TextAlignCenter
+	copyNotificationLabel.TextStyle.Bold = true
+	copyNotificationLabel.Hide()
+
+	// Copy button - copies the plain mnemonic (without numbers)
+	copyBtn := widget.NewButton("Copy Seed Phrase to Clipboard", func() {
+		s.window.Clipboard().SetContent(mnemonic)
+		copyNotificationLabel.SetText("✓ Seed phrase copied to clipboard!")
+		copyNotificationLabel.Show()
+		go func() {
+			time.Sleep(2 * time.Second)
+			copyNotificationLabel.SetText("")
+			copyNotificationLabel.Hide()
+		}()
+	})
+
+	// Mnemonic section container
+	mnemonicSectionTitle := widget.NewLabel("Your Seed Phrase:")
+	mnemonicSectionTitle.TextStyle.Bold = true
+	mnemonicSection := container.NewVBox(
+		mnemonicSectionTitle,
+		mnemonicDisplay,
+		copyBtn,
+		copyNotificationLabel,
+	)
+
+	// Confirmation text
+	confirmText := widget.NewRichTextFromMarkdown(`
 **Please confirm that you have written down these words before continuing.**
-`, mnemonic))
-
-	mnemonicText.Wrapping = fyne.TextWrapWord
+`)
+	confirmText.Wrapping = fyne.TextWrapWord
 
 	confirmBtn := widget.NewButton("I Have Written Down My Seed Phrase", func() {
 		s.showMnemonicConfirmation(mnemonic)
@@ -112,14 +159,17 @@ This is your only way to recover your wallet if you lose access to this device.
 	})
 
 	content := container.NewVBox(
-		mnemonicText,
+		titleText,
 		widget.NewSeparator(),
+		mnemonicSection,
+		widget.NewSeparator(),
+		confirmText,
 		container.NewHBox(backBtn, confirmBtn),
 	)
 
 	// Set the window content directly
 	s.window.SetContent(content)
-	s.window.Resize(fyne.NewSize(600, 500))
+	s.window.Resize(fyne.NewSize(650, 600))
 }
 
 func (s *SetupWizard) showMnemonicConfirmation(mnemonic string) {
