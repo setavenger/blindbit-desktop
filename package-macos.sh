@@ -4,6 +4,6 @@
 
 set -e
 
-fyne package -src ./cmd/blindbit-desktop
+fyne package -src ./cmd/blindbit-desktop --release
 
 mv BlindBit.app builds/
