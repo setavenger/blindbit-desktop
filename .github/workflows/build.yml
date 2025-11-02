@@ -130,44 +130,18 @@ jobs:
             echo "Error: fyne-cross binary not found at $FYNE_CROSS_CMD"
             exit 1
           fi
-          echo "Using fyne-cross for Linux ARM64 cross-compilation"
-          # fyne-cross syntax: fyne-cross <os> [options] [package]
-          # Note: -release flag may not be supported, fyne-cross builds release packages by default
-          echo "Running: $FYNE_CROSS_CMD linux -arch arm64 -output BlindBit ./cmd/blindbit-desktop"
           $FYNE_CROSS_CMD linux -arch arm64 -output BlindBit ./cmd/blindbit-desktop
-          echo "Build completed. Files created:"
-          ls -lah . || true
-          if [ -d "fyne-cross/dist" ]; then
-            echo "fyne-cross output directory contents:"
-            ls -lah fyne-cross/dist/ || true
-          fi
         shell: bash
 
       - name: Build and Package (Native builds)
         if: matrix.goos != 'linux' || matrix.goarch != 'arm64'
         run: |
           export PATH="$PATH:$HOME/go/bin"
-          # Verify fyne is available
           FYNE_CMD="$HOME/go/bin/fyne"
           if [ ! -f "$FYNE_CMD" ]; then
             echo "Error: fyne binary not found at $FYNE_CMD"
             exit 1
           fi
-          # Debug: Check current directory and sourceDir before building
-          echo "Current directory: $(pwd)"
-          echo "Source directory contents:"
-          ls -lah ./cmd/blindbit-desktop/ || echo "sourceDir not found"
-          # Debug: Show Go environment for macOS builds
-          if [ "${{ matrix.goos }}" = "darwin" ]; then
-            echo "=== Go Environment for macOS Build ==="
-            echo "GOOS=${{ matrix.goos }}"
-            echo "GOARCH=${{ matrix.goarch }}"
-            go env GOOS GOARCH || true
-            echo "CGO_ENABLED=$CGO_ENABLED"
-          fi
-          # Note: macOS Intel cross-compilation may fail on ARM runners
-          # If this fails, consider building on an Intel Mac or using a different approach
-          echo "Running: $FYNE_CMD ${{ matrix.package_cmd }}"
           $FYNE_CMD ${{ matrix.package_cmd }} || {
             if [ "${{ matrix.goos }}" = "darwin" ] && [ "${{ matrix.goarch }}" = "amd64" ]; then
               echo "Warning: macOS Intel build may not be supported on ARM runners"
@@ -176,19 +150,9 @@ jobs:
               exit 1
             fi
           }
-          # Debug: Check what was created
-          echo "Files in current directory after first build:"
-          ls -lah . || true
-          echo "Files in sourceDir after first build:"
-          ls -lah ./cmd/blindbit-desktop/ || true
           # Windows: According to Fyne docs, Windows packaging requires two builds
-          # Run again if on Windows to ensure icon/metadata is embedded
           if [ "${{ matrix.goos }}" = "windows" ]; then
-            echo "Running second build for Windows to embed icon and metadata..."
             $FYNE_CMD ${{ matrix.package_cmd }} || echo "Second build completed with warnings"
-            echo "Files after second build:"
-            ls -lah . || true
-            ls -lah ./cmd/blindbit-desktop/ || true
           fi
         shell: bash
         continue-on-error: ${{ matrix.goos == 'darwin' && matrix.goarch == 'amd64' }}
@@ -201,21 +165,13 @@ jobs:
       - name: Package Windows executable
         if: matrix.goos == 'windows'
         run: |
-          echo "Looking for build artifacts..."
-          echo "Current directory: $(pwd)"
-          ls -lah
-          echo "Checking sourceDir for exe:"
-          ls -lah ./cmd/blindbit-desktop/ || true
-          # Check multiple possible locations
           if [ -f "BlindBit.exe" ]; then
             mv BlindBit.exe release-artifacts/BlindBit-${{ matrix.goos }}-${{ matrix.goarch }}.exe
           elif [ -f "./cmd/blindbit-desktop/BlindBit.exe" ]; then
             mv ./cmd/blindbit-desktop/BlindBit.exe release-artifacts/BlindBit-${{ matrix.goos }}-${{ matrix.goarch }}.exe
           else
-            echo "Warning: BlindBit.exe not found. Searching recursively:"
-            find . -type f -name "*.exe" -ls || true
-            find . -type f -name "*blindbit*" -ls || true
-            find . -type f -name "*BlindBit*" -ls || true
+            echo "Error: BlindBit.exe not found"
+            exit 1
           fi
         shell: bash
 
@@ -223,120 +179,53 @@ jobs:
       - name: Package Linux tar archive
         if: matrix.goos == 'linux'
         run: |
-          echo "Looking for build artifacts..."
-          ls -lah
+          ARTIFACT_FOUND=false
           # Check fyne-cross output directory (for ARM64 builds)
           if [ "${{ matrix.goarch }}" = "arm64" ] && [ -d "fyne-cross/dist" ]; then
-            echo "Found fyne-cross output directory"
-            ls -lah fyne-cross/dist/
-            # fyne-cross typically creates tar.xz files
-            find fyne-cross/dist -name "*.tar.xz" -exec mv {} release-artifacts/BlindBit-${{ matrix.goos }}-${{ matrix.goarch }}.tar.xz \; || true
-            find fyne-cross/dist -name "*.tar.gz" -exec mv {} release-artifacts/BlindBit-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz \; || true
-          fi
-          # Check standard locations (for native builds)
-          if [ -f "BlindBit.tar.xz" ]; then
-            mv BlindBit.tar.xz release-artifacts/BlindBit-${{ matrix.goos }}-${{ matrix.goarch }}.tar.xz
-          elif [ -f "BlindBit.tar.gz" ]; then
-            mv BlindBit.tar.gz release-artifacts/BlindBit-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
-          elif [ -f "BlindBit.AppImage" ]; then
-            mv BlindBit.AppImage release-artifacts/BlindBit-${{ matrix.goos }}-${{ matrix.goarch }}.AppImage
-            chmod +x release-artifacts/BlindBit-${{ matrix.goos }}-${{ matrix.goarch }}.AppImage
-          elif [ -f "blindbit-desktop" ]; then
-            mv blindbit-desktop release-artifacts/BlindBit-${{ matrix.goos }}-${{ matrix.goarch }}
-            chmod +x release-artifacts/BlindBit-${{ matrix.goos }}-${{ matrix.goarch }}
-          else
-            echo "Warning: No expected artifacts found. Searching all directories:"
-            find . -type f -name "*.tar.*" -ls || true
-            find . -type f -name "*.AppImage" -ls || true
-            find . -type f -name "*blindbit*" -ls || true
-          fi
-        shell: bash
-
-      # macOS: Inspect .app bundle before packaging
-      - name: Inspect macOS app bundle
-        if: matrix.goos == 'darwin'
-        run: |
-          if [ -d "BlindBit.app" ]; then
-            echo "=== Inspecting BlindBit.app ==="
-            echo ""
-            echo "=== Bundle Structure ==="
-            find BlindBit.app -type f -exec ls -lh {} \;
-            echo ""
-            echo "=== Binary Architecture ==="
-            BINARY="BlindBit.app/Contents/MacOS/blindbit-desktop"
-            if [ -f "$BINARY" ]; then
-              file "$BINARY"
-              echo ""
-              echo "=== Lipo info (architectures) ==="
-              lipo -info "$BINARY" 2>&1 || echo "lipo not available or binary not a fat binary"
-              echo ""
-              echo "=== Code Signing Status ==="
-              codesign -dvv "$BINARY" 2>&1 || echo "Not signed"
-              codesign -dvv "BlindBit.app" 2>&1 || echo "App bundle not signed"
-              echo ""
-              echo "=== Note: Code Signing ==="
-              echo "This app is adhoc-signed (not signed with a developer certificate)."
-              echo "macOS may show 'damaged file' warning on first launch."
-              echo "Users can bypass by: right-click > Open, or remove quarantine: xattr -d com.apple.quarantine BlindBit.app"
-              echo ""
-              echo "=== Info.plist Contents ==="
-              if [ -f "BlindBit.app/Contents/Info.plist" ]; then
-                cat "BlindBit.app/Contents/Info.plist"
-              fi
-              echo ""
-              echo "=== Binary Size ==="
-              ls -lh "$BINARY"
-              echo ""
-              echo "=== Linked Libraries and Dependencies ==="
-              otool -L "$BINARY" 2>&1 || echo "otool not available"
-              echo ""
-              echo "=== Check minimum macOS version ==="
-              otool -l "$BINARY" | grep -A 2 LC_VERSION_MIN_MACOSX || otool -l "$BINARY" | grep -A 2 LC_BUILD_VERSION || echo "Could not determine minimum version"
-              echo ""
-              echo "=== Binary Verification (try to load) ==="
-              # Try to verify the binary can be loaded (this will catch major issues)
-              # Use a timeout in case it tries to run
-              # Also try with direct binary execution (not through app bundle)
-              cd "$(dirname "$BINARY")"
-              ./blindbit-desktop --version 2>&1 || ./blindbit-desktop -version 2>&1 || ./blindbit-desktop -h 2>&1 || echo "Binary execution test completed (may have exited, timed out, or needs GUI)"
-              cd - > /dev/null
-              echo ""
-              echo "=== Check for missing frameworks ==="
-              otool -l "$BINARY" | grep -A 2 LC_LOAD | head -20 || echo "Could not check load commands"
-              echo ""
-              echo "=== Verify binary integrity ==="
-              # Check if binary can be read and is valid Mach-O
-              strings "$BINARY" | head -5 || echo "Could not read strings from binary"
-            else
-              echo "ERROR: Binary not found at $BINARY"
+            TAR_XZ=$(find fyne-cross/dist -name "*.tar.xz" | head -1)
+            TAR_GZ=$(find fyne-cross/dist -name "*.tar.gz" | head -1)
+            if [ -n "$TAR_XZ" ]; then
+              mv "$TAR_XZ" release-artifacts/BlindBit-${{ matrix.goos }}-${{ matrix.goarch }}.tar.xz
+              ARTIFACT_FOUND=true
+            elif [ -n "$TAR_GZ" ]; then
+              mv "$TAR_GZ" release-artifacts/BlindBit-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
+              ARTIFACT_FOUND=true
             fi
           fi
+          # Check standard locations (for native builds)
+          if [ "$ARTIFACT_FOUND" = "false" ]; then
+            if [ -f "BlindBit.tar.xz" ]; then
+              mv BlindBit.tar.xz release-artifacts/BlindBit-${{ matrix.goos }}-${{ matrix.goarch }}.tar.xz
+              ARTIFACT_FOUND=true
+            elif [ -f "BlindBit.tar.gz" ]; then
+              mv BlindBit.tar.gz release-artifacts/BlindBit-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
+              ARTIFACT_FOUND=true
+            elif [ -f "BlindBit.AppImage" ]; then
+              mv BlindBit.AppImage release-artifacts/BlindBit-${{ matrix.goos }}-${{ matrix.goarch }}.AppImage
+              chmod +x release-artifacts/BlindBit-${{ matrix.goos }}-${{ matrix.goarch }}.AppImage
+              ARTIFACT_FOUND=true
+            elif [ -f "blindbit-desktop" ]; then
+              mv blindbit-desktop release-artifacts/BlindBit-${{ matrix.goos }}-${{ matrix.goarch }}
+              chmod +x release-artifacts/BlindBit-${{ matrix.goos }}-${{ matrix.goarch }}
+              ARTIFACT_FOUND=true
+            fi
+          fi
+          if [ "$ARTIFACT_FOUND" = "false" ]; then
+            echo "Error: No Linux artifacts found"
+            exit 1
+          fi
         shell: bash
 
-      # macOS: Copy .app bundle and create .dmg
+      # macOS: Copy .app bundle and create .zip
       - name: Package macOS app
         if: matrix.goos == 'darwin'
         run: |
-          echo "Looking for macOS build artifacts..."
-          ls -lah
-          # Check standard location (for native builds)
           if [ -d "BlindBit.app" ]; then
-            # Create zip archive of .app bundle
             zip -r release-artifacts/BlindBit-${{ matrix.goos }}-${{ matrix.goarch }}.zip BlindBit.app
-            
-            # Optionally create DMG (requires create-dmg or fyne release)
-            # ${{ env.GITHUB_WORKSPACE }}/go/bin/fyne release -os darwin -sourceDir ./cmd/blindbit-desktop
-            # if [ -f "BlindBit.dmg" ]; then
-            #   mv BlindBit.dmg release-artifacts/BlindBit-${{ matrix.goos }}-${{ matrix.goarch }}.dmg
-            # fi
           else
-            echo "Warning: No .app bundle found. Searching all directories:"
-            find . -type d -name "*.app" -ls || true
+            echo "Error: BlindBit.app not found"
+            exit 1
           fi
-        shell: bash
-
-      - name: List artifacts
-        run: ls -lah release-artifacts/
         shell: bash
 
       - name: Upload artifacts
@@ -368,7 +257,6 @@ jobs:
           for file in *; do
             sha256sum "$file" > "$file.sha256"
           done
-          ls -lah
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
