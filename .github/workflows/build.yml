@@ -3,7 +3,7 @@ name: Build and Package
 on:
   push:
     branches:
-      - alpha
+      - alpha-build-packaging-tests
     tags:
       - 'v*'
   workflow_dispatch:
@@ -213,6 +213,21 @@ jobs:
           if [ "$ARTIFACT_FOUND" = "false" ]; then
             echo "Error: No Linux artifacts found"
             exit 1
+          fi
+        shell: bash
+
+      # macOS: Remove signature from ARM64 builds (to match unsigned Intel builds)
+      - name: Remove code signature (ARM64 only)
+        if: matrix.goos == 'darwin' && matrix.goarch == 'arm64'
+        run: |
+          if [ -d "BlindBit.app" ]; then
+            BINARY="BlindBit.app/Contents/MacOS/blindbit-desktop"
+            if [ -f "$BINARY" ]; then
+              # Remove signature from binary
+              codesign --remove-signature "$BINARY" || true
+              # Remove signature from app bundle
+              codesign --remove-signature "BlindBit.app" || true
+            fi
           fi
         shell: bash
 
