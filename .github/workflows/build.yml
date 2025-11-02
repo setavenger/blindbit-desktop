@@ -223,10 +223,13 @@ jobs:
           if [ -d "BlindBit.app" ]; then
             BINARY="BlindBit.app/Contents/MacOS/blindbit-desktop"
             if [ -f "$BINARY" ]; then
-              # Re-sign binary with adhoc signature (forces re-signature)
-              codesign --force --deep --sign - "$BINARY" || true
-              # Re-sign app bundle with adhoc signature
-              codesign --force --deep --sign - "BlindBit.app" || true
+              # First, sign the binary with adhoc signature (no --deep for binary)
+              codesign --force --sign - --timestamp=none "$BINARY" || true
+              # Then sign the entire app bundle with --deep (this signs nested components)
+              # Note: --options runtime requires developer certificate, so we skip it for adhoc
+              codesign --force --deep --sign - --timestamp=none "BlindBit.app" || true
+              # Verify the signature
+              codesign -vvv --deep --strict "BlindBit.app" || true
             fi
           fi
         shell: bash
