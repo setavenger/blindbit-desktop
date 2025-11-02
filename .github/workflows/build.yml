@@ -3,7 +3,7 @@ name: Build and Package
 on:
   push:
     branches:
-      - alpha
+      - alpha-build-packaging-tests
     tags:
       - 'v*'
   workflow_dispatch:
@@ -213,6 +213,21 @@ jobs:
           if [ "$ARTIFACT_FOUND" = "false" ]; then
             echo "Error: No Linux artifacts found"
             exit 1
+          fi
+        shell: bash
+
+      # macOS: Re-sign ARM64 builds with adhoc signature (to ensure valid signature)
+      - name: Re-sign with adhoc signature (ARM64 only)
+        if: matrix.goos == 'darwin' && matrix.goarch == 'arm64'
+        run: |
+          if [ -d "BlindBit.app" ]; then
+            BINARY="BlindBit.app/Contents/MacOS/blindbit-desktop"
+            if [ -f "$BINARY" ]; then
+              # Re-sign binary with adhoc signature (forces re-signature)
+              codesign --force --deep --sign - "$BINARY" || true
+              # Re-sign app bundle with adhoc signature
+              codesign --force --deep --sign - "BlindBit.app" || true
+            fi
           fi
         shell: bash
 
