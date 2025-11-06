@@ -27,9 +27,13 @@ A modern desktop application that combines the functionality of blindbit-scan an
 - C compiler (for Fyne dependencies)
 - System development tools
 
-Note: If you want to run your own indexer you need to run BlindBit Oracle on a [specific branch (rm-static-index-and-cleanup)](https://github.com/setavenger/blindbit-oracle/tree/rm-static-index-and-cleanup)
+> [!NOTE] 
+> **The Indexer (BlindBit Oracle)**
+>
+> If you want to run your own indexer you need to run BlindBit Oracle on a [specific branch (rm-static-index-and-cleanup)](https://github.com/setavenger/blindbit-oracle/tree/rm-static-index-and-cleanup)
+>
+> I'm hosting an up to date indexer for signet and mainnet on **signet.oracle.setor.dev** and **oracle.setor.dev** respectively. They are also the default indexers shown when selecting the networks.
 
-I'm hosting an up to date indexer for signet and mainnet on signet.oracle.setor.dev and oracle.setor.dev respectively. They are also the default indexers shown when selecting the networks.
 
 ## Installation
 
