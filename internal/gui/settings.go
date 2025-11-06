@@ -9,37 +9,12 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/setavenger/blindbit-desktop/internal/configs"
 	"github.com/setavenger/blindbit-desktop/internal/storage"
 	"github.com/setavenger/blindbit-lib/logging"
-	"github.com/setavenger/blindbit-lib/types"
 )
 
 func (g *MainGUI) createSettingsTab() fyne.CanvasObject {
-	// Network selection
-	networkLabel := widget.NewLabel("Network:")
-	networkRadio := widget.NewRadioGroup([]string{"mainnet", "testnet", "signet"}, func(value string) {
-		switch value {
-		case "mainnet":
-			g.manager.Wallet.Network = types.NetworkMainnet
-		case "testnet":
-			g.manager.Wallet.Network = types.NetworkTestnet
-		case "signet":
-			g.manager.Wallet.Network = types.NetworkSignet
-		}
-	})
-
-	// Set current network
-	switch g.manager.Wallet.Network {
-	case types.NetworkMainnet:
-		networkRadio.SetSelected("mainnet")
-	case types.NetworkTestnet:
-		networkRadio.SetSelected("testnet")
-	case types.NetworkSignet:
-		networkRadio.SetSelected("signet")
-	default:
-		networkRadio.SetSelected("testnet")
-	}
-
 	// Oracle address
 	oracleLabel := widget.NewLabel("Oracle Address:")
 	oracleEntry := widget.NewEntry()
@@ -85,16 +60,12 @@ func (g *MainGUI) createSettingsTab() fyne.CanvasObject {
 			dustLimitEntry,
 			minChangeEntry,
 			useTLSCheck,
-			networkRadio,
 		)
 	})
 
 	// Form layout
 	form := container.NewVBox(
 		widget.NewLabel("Wallet Settings"),
-		widget.NewSeparator(),
-		networkLabel,
-		networkRadio,
 		widget.NewSeparator(),
 		oracleLabel,
 		oracleEntry,
@@ -167,26 +138,23 @@ func (g *MainGUI) resetToDefaults(
 	dustLimitEntry,
 	minChangeEntry *widget.Entry,
 	useTLSCheck *widget.Check,
-	networkRadio *widget.RadioGroup,
 ) {
 	// Reset to default values
-	networkRadio.SetSelected("testnet")
-	g.manager.Wallet.Network = types.NetworkTestnet
-
-	oracleEntry.SetText("127.0.0.1:7001")
-	g.manager.OracleAddress = "127.0.0.1:7001"
+	defaultOracleAddr := configs.DefaultOracleAddressForNetwork(g.manager.Wallet.Network)
+	oracleEntry.SetText(defaultOracleAddr)
+	g.manager.OracleAddress = defaultOracleAddr
 
 	birthHeightEntry.SetText("0")
 	g.manager.SetBirthHeight(0, false)
 
-	dustLimitEntry.SetText("546")
-	g.manager.DustLimit = 546
+	dustLimitEntry.SetText(fmt.Sprintf("%d", configs.DefaultMinimumAmount))
+	g.manager.DustLimit = configs.DefaultMinimumAmount
 
-	minChangeEntry.SetText("546")
-	g.manager.MinChangeAmount = 546
+	minChangeEntry.SetText(fmt.Sprintf("%d", configs.DefaultMinimumAmount))
+	g.manager.MinChangeAmount = configs.DefaultMinimumAmount
 
-	useTLSCheck.SetChecked(false)
-	g.manager.OracleUseTLS = false
+	useTLSCheck.SetChecked(true)
+	g.manager.OracleUseTLS = true
 
 	dialog.ShowInformation("Reset", "Settings reset to defaults", g.window)
 }
