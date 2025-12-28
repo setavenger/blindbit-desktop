@@ -21,10 +21,12 @@ import (
 )
 
 type SetupWizard struct {
-	app      fyne.App
-	window   fyne.Window
-	dataDir  string
-	onFinish func(*controller.Manager)
+	app                fyne.App
+	window             fyne.Window
+	dataDir            string
+	onFinish           func(*controller.Manager)
+	currentBlockHeight uint64
+	currentNetwork     types.Network
 }
 
 func NewSetupWizard(
@@ -59,7 +61,7 @@ You can either:
 `)
 
 	createBtn := widget.NewButton("Create New Wallet", func() {
-		s.showWalletTypeDialog()
+		s.showNetworkSelection("")
 	})
 
 	importBtn := widget.NewButton("Import Existing Wallet", func() {
@@ -78,13 +80,34 @@ You can either:
 	s.window.Resize(fyne.NewSize(500, 400))
 }
 
-func (s *SetupWizard) showWalletTypeDialog() {
+func (s *SetupWizard) showWalletTypeDialog(network types.Network) {
 	// Generate a new mnemonic
 	mnemonic, err := wallet.GenerateMnemonic()
 	if err != nil {
 		dialog.ShowError(fmt.Errorf("failed to generate mnemonic: %v", err), s.window)
 		return
 	}
+
+	// Query current block height for selected network
+	s.currentNetwork = network
+	blockHeightLabel := widget.NewLabel("Current Block Height: Fetching...")
+	blockHeightLabel.TextStyle.Monospace = true
+
+	// Fetch current block height for selected network
+	go func() {
+		height, err := configs.GetCurrentBlockHeight(network)
+		if err == nil {
+			s.currentBlockHeight = height
+			blockHeightLabel.SetText(fmt.Sprintf("Current Block Height: %d", height))
+			logging.L.Debug().
+				Uint64("height", height).
+				Msg("fetched block height for seed phrase backup")
+		} else {
+			blockHeightLabel.SetText("Current Block Height: Unable to fetch")
+			logging.L.Warn().Err(err).
+				Msg("failed to fetch current block height during seed phrase backup")
+		}
+	}()
 
 	// Title and instructions
 	titleText := widget.NewRichTextFromMarkdown(`
@@ -142,6 +165,8 @@ This is your only way to recover your wallet if you lose access to this device.
 		mnemonicDisplay,
 		copyBtn,
 		copyNotificationLabel,
+		widget.NewSeparator(),
+		blockHeightLabel,
 	)
 
 	// Confirmation text
@@ -151,11 +176,11 @@ This is your only way to recover your wallet if you lose access to this device.
 	confirmText.Wrapping = fyne.TextWrapWord
 
 	confirmBtn := widget.NewButton("I Have Written Down My Seed Phrase", func() {
-		s.showMnemonicConfirmation(mnemonic)
+		s.showMnemonicConfirmation(mnemonic, network)
 	})
 
 	backBtn := widget.NewButton("Back", func() {
-		s.showWelcomeDialog()
+		s.showNetworkSelection("")
 	})
 
 	content := container.NewVBox(
@@ -172,7 +197,7 @@ This is your only way to recover your wallet if you lose access to this device.
 	s.window.Resize(fyne.NewSize(650, 600))
 }
 
-func (s *SetupWizard) showMnemonicConfirmation(mnemonic string) {
+func (s *SetupWizard) showMnemonicConfirmation(mnemonic string, network types.Network) {
 	// Ask user to confirm they've written down the mnemonic
 	confirmText := widget.NewRichTextFromMarkdown(`
 # Confirm Your Seed Phrase
@@ -189,8 +214,8 @@ To ensure you have written down your seed phrase correctly, please enter it belo
 	confirmBtn := widget.NewButton("Confirm Seed Phrase", func() {
 		enteredMnemonic := strings.TrimSpace(mnemonicEntry.Text)
 		if enteredMnemonic == mnemonic {
-			// Mnemonic matches, proceed to network selection
-			s.showNetworkSelection(mnemonic)
+			// Mnemonic matches, proceed to create wallet
+			s.createWalletFromMnemonic(mnemonic, network)
 		} else {
 			err := errors.New("seed phrase does not match. Please try again")
 			dialog.ShowError(err, s.window)
@@ -198,7 +223,7 @@ To ensure you have written down your seed phrase correctly, please enter it belo
 	})
 
 	backBtn := widget.NewButton("Back", func() {
-		s.showWalletTypeDialog()
+		s.showWalletTypeDialog(network)
 	})
 
 	content := container.NewVBox(
@@ -276,11 +301,21 @@ Choose the Bitcoin network for your wallet:
 	selectedNetwork = types.NetworkSignet
 
 	continueBtn := widget.NewButton("Continue", func() {
-		s.createWalletFromMnemonic(mnemonic, selectedNetwork)
+		if mnemonic == "" {
+			// No mnemonic yet, this is for creating a new wallet - show seed phrase generation
+			s.showWalletTypeDialog(selectedNetwork)
+		} else {
+			// Mnemonic provided, this is for importing - create wallet directly
+			s.createWalletFromMnemonic(mnemonic, selectedNetwork)
+		}
 	})
 
 	backBtn := widget.NewButton("Back", func() {
-		s.showWelcomeDialog()
+		if mnemonic == "" {
+			s.showWelcomeDialog()
+		} else {
+			s.showImportDialog()
+		}
 	})
 
 	content := container.NewVBox(
@@ -308,6 +343,23 @@ func (s *SetupWizard) createWalletFromMnemonic(
 		return
 	}
 
+	// Ensure we have the block height for the selected network
+	if s.currentNetwork != network || s.currentBlockHeight == 0 {
+		s.currentNetwork = network
+		go func() {
+			height, err := configs.GetCurrentBlockHeight(network)
+			if err == nil {
+				s.currentBlockHeight = height
+				logging.L.Debug().
+					Uint64("height", height).
+					Msg("fetched block height for selected network")
+			} else {
+				logging.L.Warn().Err(err).
+					Msg("failed to fetch current block height for selected network")
+			}
+		}()
+	}
+
 	// Create manager with the wallet
 	manager := controller.NewManager()
 	manager.Wallet = walletInstance
@@ -318,24 +370,34 @@ func (s *SetupWizard) createWalletFromMnemonic(
 }
 
 func (s *SetupWizard) showConfigurationDialog(manager *controller.Manager) {
-	// Birth height - prefilled with current block height
+	// Birth height - prefilled with current block height (already queried earlier)
 	birthHeightEntry := widget.NewEntry()
 	birthHeightEntry.SetPlaceHolder("Leave empty for current height")
 	birthHeightLabel := widget.NewLabel("Birth Height (optional):")
 
-	// Fetch current block height and prefill
-	go func() {
-		height, err := configs.GetCurrentBlockHeight(manager.Wallet.Network)
-		if err == nil {
-			birthHeightEntry.SetText(fmt.Sprintf("%d", height))
-			logging.L.Debug().
-				Uint64("height", height).
-				Msg("prefilled birth height from blockchain")
-		} else {
-			logging.L.Warn().Err(err).
-				Msg("failed to fetch current block height")
-		}
-	}()
+	// Use the block height we already queried, or fetch if not available
+	if s.currentBlockHeight > 0 && s.currentNetwork == manager.Wallet.Network {
+		birthHeightEntry.SetText(fmt.Sprintf("%d", s.currentBlockHeight))
+		logging.L.Debug().
+			Uint64("height", s.currentBlockHeight).
+			Msg("prefilled birth height from earlier query")
+	} else {
+		// Fallback: fetch current block height if we don't have it yet
+		go func() {
+			height, err := configs.GetCurrentBlockHeight(manager.Wallet.Network)
+			if err == nil {
+				s.currentBlockHeight = height
+				s.currentNetwork = manager.Wallet.Network
+				birthHeightEntry.SetText(fmt.Sprintf("%d", height))
+				logging.L.Debug().
+					Uint64("height", height).
+					Msg("prefilled birth height from blockchain (fallback)")
+			} else {
+				logging.L.Warn().Err(err).
+					Msg("failed to fetch current block height")
+			}
+		}()
+	}
 
 	// Oracle address (prefilled from selected network)
 	oracleEntry := widget.NewEntry()
