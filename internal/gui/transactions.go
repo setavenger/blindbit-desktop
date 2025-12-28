@@ -11,7 +11,7 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 
-	"github.com/setavenger/blindbit-lib/types"
+	"github.com/setavenger/blindbit-desktop/internal/configs"
 	"github.com/setavenger/blindbit-lib/wallet"
 )
 
@@ -222,16 +222,7 @@ func (g *MainGUI) copyTxidToClipboard(text string) {
 func (g *MainGUI) openInExplorer(txid string) {
 	// Open mempool.space explorer using Fyne's built-in OpenURL
 	var urlStr string
-	switch g.manager.GetNetwork() {
-	case types.NetworkMainnet:
-		urlStr = "https://mempool.space/tx/" + txid
-	case types.NetworkTestnet:
-		urlStr = "https://mempool.space/testnet/tx/" + txid
-	case types.NetworkSignet:
-		urlStr = "https://mempool.space/signet/tx/" + txid
-	default:
-		urlStr = "https://mempool.space/tx/" + txid
-	}
+	urlStr = configs.GetMempoolSpaceURL(g.manager.GetNetwork()) + "/tx/" + txid
 
 	u, err := url.Parse(urlStr)
 	if err != nil {
