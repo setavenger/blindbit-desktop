@@ -283,22 +283,48 @@ Choose the Bitcoin network for your wallet:
 `)
 
 	var selectedNetwork types.Network
+	// Helper function to fetch block height for a network
+	fetchBlockHeight := func(network types.Network) {
+		// Clear old block height when network changes to ensure we don't use wrong value
+		if s.currentNetwork != network {
+			s.currentBlockHeight = 0
+		}
+		s.currentNetwork = network
+		go func() {
+			height, err := configs.GetCurrentBlockHeight(network)
+			if err == nil {
+				s.currentBlockHeight = height
+				logging.L.Debug().
+					Uint64("height", height).
+					Msg("fetched block height for network selection")
+			} else {
+				logging.L.Warn().Err(err).
+					Msg("failed to fetch current block height for network selection")
+			}
+		}()
+	}
+
 	networkRadio := widget.NewRadioGroup(
 		[]string{"mainnet", "testnet", "signet"},
 		func(value string) {
 			switch value {
 			case "mainnet":
 				selectedNetwork = types.NetworkMainnet
+				fetchBlockHeight(types.NetworkMainnet)
 			case "testnet":
 				selectedNetwork = types.NetworkTestnet
+				fetchBlockHeight(types.NetworkTestnet)
 			case "signet":
 				selectedNetwork = types.NetworkSignet
+				fetchBlockHeight(types.NetworkSignet)
 			}
 		},
 	)
 	// Initialize based on defaults
 	networkRadio.SetSelected(configs.DefaultNetwork)
 	selectedNetwork = types.NetworkSignet
+	// Fetch block height for default network
+	fetchBlockHeight(types.NetworkSignet)
 
 	continueBtn := widget.NewButton("Continue", func() {
 		if mnemonic == "" {
@@ -343,7 +369,8 @@ func (s *SetupWizard) createWalletFromMnemonic(
 		return
 	}
 
-	// Ensure we have the block height for the selected network
+	// Block height should already be fetched during network selection
+	// If not, fetch it now as fallback
 	if s.currentNetwork != network || s.currentBlockHeight == 0 {
 		s.currentNetwork = network
 		go func() {
@@ -352,7 +379,7 @@ func (s *SetupWizard) createWalletFromMnemonic(
 				s.currentBlockHeight = height
 				logging.L.Debug().
 					Uint64("height", height).
-					Msg("fetched block height for selected network")
+					Msg("fetched block height for selected network (fallback)")
 			} else {
 				logging.L.Warn().Err(err).
 					Msg("failed to fetch current block height for selected network")
