@@ -96,6 +96,9 @@ Click on a transaction to view details.
 		},
 	)
 
+	// Store reference to transaction list for refreshing after new transactions
+	g.transactionList = txList
+
 	// Set up click handler for transaction details
 	txList.OnSelected = func(id widget.ListItemID) {
 		if id < len(g.manager.TransactionHistory) {

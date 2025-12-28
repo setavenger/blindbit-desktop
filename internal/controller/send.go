@@ -72,6 +72,19 @@ func (m *Manager) RecordSentTransaction(
 		return fmt.Errorf("transaction is nil")
 	}
 
+	// Get the transaction ID to check for duplicates
+	txID := GetTxID(txMetadata.Tx)
+
+	// Check if transaction already exists in history (prevent duplicates at struct level)
+	for _, existingTx := range m.TransactionHistory {
+		if bytes.Equal(existingTx.TxID[:], txID[:]) {
+			logging.L.Warn().
+				Str("txid", fmt.Sprintf("%x", txID)).
+				Msg("transaction already exists in history, skipping duplicate")
+			return fmt.Errorf("transaction already exists in history")
+		}
+	}
+
 	// Use the TxItemFromTxMetadata function from blindbit-lib
 	txItem, err := wallet.TxItemFromTxMetadata(m.Wallet, txMetadata)
 	if err != nil {

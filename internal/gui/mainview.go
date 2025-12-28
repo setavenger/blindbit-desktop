@@ -6,16 +6,18 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/widget"
 	"github.com/setavenger/blindbit-desktop/internal/controller"
 	"github.com/setavenger/blindbit-desktop/internal/storage"
 	"github.com/setavenger/blindbit-lib/logging"
 )
 
 type MainGUI struct {
-	app     fyne.App
-	window  fyne.Window
-	manager *controller.Manager
-	tabs    *container.AppTabs
+	app             fyne.App
+	window          fyne.Window
+	manager         *controller.Manager
+	tabs            *container.AppTabs
+	transactionList *widget.List // Reference to transaction list for refreshing
 }
 
 func NewMainGUI(

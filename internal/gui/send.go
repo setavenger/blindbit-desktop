@@ -218,9 +218,32 @@ func (g *MainGUI) showTransactionDetails(
 
 	title := widget.NewLabelWithStyle("Transaction Details", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 
-	confirmBtn := widget.NewButton("Confirm & Broadcast", func() {
-		g.broadcastTransaction(txMetadata, recipients)
-	})
+	// Check if transaction already exists in history to disable button
+	var confirmBtn *widget.Button
+	if txMetadata.Tx != nil {
+		txID := controller.GetTxID(txMetadata.Tx)
+		alreadyBroadcast := false
+		for _, existingTx := range g.manager.TransactionHistory {
+			if bytes.Equal(existingTx.TxID[:], txID[:]) {
+				alreadyBroadcast = true
+				break
+			}
+		}
+
+		confirmBtn = widget.NewButton("Confirm & Broadcast", func() {
+			g.broadcastTransaction(txMetadata, recipients)
+		})
+
+		if alreadyBroadcast {
+			confirmBtn.Disable()
+			confirmBtn.SetText("Already Broadcast")
+		}
+	} else {
+		confirmBtn = widget.NewButton("Confirm & Broadcast", func() {
+			g.broadcastTransaction(txMetadata, recipients)
+		})
+		confirmBtn.Disable()
+	}
 
 	grid := container.NewGridWithColumns(2, gridObjects...)
 
@@ -239,22 +262,29 @@ func (g *MainGUI) broadcastTransaction(
 	txMetadata *wallet.TxMetadata,
 	recipients []wallet.Recipient,
 ) {
-	// Serialize transaction to hex
-	var txHex string
-	if txMetadata.Tx != nil {
-		var err error
-		txHex, err = controller.SerializeTx(txMetadata.Tx)
-		if err != nil {
-			dialog.ShowError(fmt.Errorf("failed to serialize transaction: %v", err), g.window)
-			return
-		}
-	} else {
+	if txMetadata.Tx == nil {
 		dialog.ShowError(fmt.Errorf("no transaction to broadcast"), g.window)
 		return
 	}
 
+	// Check if transaction already exists in history (prevent multiple broadcasts)
+	txID := controller.GetTxID(txMetadata.Tx)
+	for _, existingTx := range g.manager.TransactionHistory {
+		if bytes.Equal(existingTx.TxID[:], txID[:]) {
+			dialog.ShowError(fmt.Errorf("transaction has already been broadcast"), g.window)
+			return
+		}
+	}
+
+	// Serialize transaction to hex
+	txHex, err := controller.SerializeTx(txMetadata.Tx)
+	if err != nil {
+		dialog.ShowError(fmt.Errorf("failed to serialize transaction: %v", err), g.window)
+		return
+	}
+
 	// Broadcast transaction
-	err := g.manager.BroadcastTransaction(txHex, g.manager.GetNetwork())
+	err = g.manager.BroadcastTransaction(txHex, g.manager.GetNetwork())
 	if err != nil {
 		logging.L.Err(err).Str("tx_hex", txHex).Msg("failed to broadcast")
 		dialog.ShowError(fmt.Errorf("failed to broadcast transaction: %v", err), g.window)
@@ -268,6 +298,11 @@ func (g *MainGUI) broadcastTransaction(
 	if err != nil {
 		dialog.ShowError(fmt.Errorf("failed to record transaction: %v", err), g.window)
 		return
+	}
+
+	// Refresh transaction list to show the new unconfirmed transaction
+	if g.transactionList != nil {
+		g.transactionList.Refresh()
 	}
 
 	// Show success message
