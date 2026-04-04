@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"sort"
+	"sync"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -85,12 +86,15 @@ func (g *MainGUI) createOverviewTab() fyne.CanvasObject {
 		})
 		return indices
 	}
+	var mu sync.RWMutex
 	sortedIndices := buildSortedIndices()
 
 	// Show the most recent transactions (up to 10)
 	recentTxList := widget.NewList(
 		func() int {
+			mu.RLock()
 			n := len(sortedIndices)
+			mu.RUnlock()
 			if n > 10 {
 				return 10
 			}
@@ -107,8 +111,16 @@ func (g *MainGUI) createOverviewTab() fyne.CanvasObject {
 		func(id widget.ListItemID, obj fyne.CanvasObject) {
 			history := g.manager.TransactionHistory
 
-			if id < len(sortedIndices) {
-				tx := history[sortedIndices[id]]
+			mu.RLock()
+			idxLen := len(sortedIndices)
+			var txIdx int
+			if id < idxLen {
+				txIdx = sortedIndices[id]
+			}
+			mu.RUnlock()
+
+			if id < idxLen {
+				tx := history[txIdx]
 				c := obj.(*fyne.Container)
 
 				txidLabel := c.Objects[0].(*widget.Label)
@@ -158,7 +170,10 @@ func (g *MainGUI) createOverviewTab() fyne.CanvasObject {
 		defer ticker.Stop()
 		for range ticker.C {
 			updateBalance()
-			sortedIndices = buildSortedIndices()
+			newIndices := buildSortedIndices()
+			mu.Lock()
+			sortedIndices = newIndices
+			mu.Unlock()
 			recentTxList.Refresh()
 			currentScanLabel.SetText(
 				"Scanned Height: " + FormatHeightUint64(g.manager.Wallet.LastScanHeight),
