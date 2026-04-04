@@ -1,8 +1,6 @@
 package gui
 
 import (
-	"encoding/hex"
-	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -120,6 +118,10 @@ func (g *MainGUI) createOverviewTab() fyne.CanvasObject {
 			mu.RUnlock()
 
 			if id < idxLen {
+				// Guard against the history slice being replaced with a shorter one.
+				if txIdx >= len(history) {
+					return
+				}
 				tx := history[txIdx]
 				c := obj.(*fyne.Container)
 
@@ -128,28 +130,11 @@ func (g *MainGUI) createOverviewTab() fyne.CanvasObject {
 				amountLabel := c.Objects[2].(*widget.Label)
 				statusLabel := c.Objects[3].(*widget.Label)
 
-				txidHex := hex.EncodeToString(tx.TxID[:])
-				txidLabel.SetText(fmt.Sprintf("%.8s...", txidHex))
-				heightLabel.SetText(FormatNumber(int64(tx.ConfirmHeight)))
-
-				netAmount := tx.NetAmount()
-				var amountText string
-				if netAmount > 0 {
-					amountText = "+" + FormatSatoshiUint64(uint64(netAmount))
-				} else if netAmount < 0 {
-					amountText = FormatSatoshi(int64(netAmount))
-				} else {
-					amountText = FormatSatoshiUint64(0)
-				}
-				amountLabel.SetText(amountText)
-
-				var status string
-				if tx.ConfirmHeight > 0 {
-					status = "Confirmed"
-				} else {
-					status = "Pending"
-				}
-				statusLabel.SetText(status)
+				row := FormatTxRow(tx)
+				txidLabel.SetText(row.TXID)
+				heightLabel.SetText(row.Height)
+				amountLabel.SetText(row.NetAmount)
+				statusLabel.SetText(row.Status)
 			}
 		},
 	)
@@ -166,7 +151,7 @@ func (g *MainGUI) createOverviewTab() fyne.CanvasObject {
 
 	// --- Periodic updates ---
 	go func() {
-		ticker := time.NewTicker(30 * time.Second)
+		ticker := time.NewTicker(10 * time.Second)
 		defer ticker.Stop()
 		for range ticker.C {
 			updateBalance()

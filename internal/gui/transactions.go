@@ -15,6 +15,20 @@ import (
 	"github.com/setavenger/blindbit-lib/wallet"
 )
 
+// formatTxRowLabels populates the four labels in a transaction list row using
+// FormatTxRow so both the Transactions tab and the Dashboard share identical
+// display logic.
+func formatTxRowLabels(
+	txidLabel, heightLabel, amountLabel, statusLabel *widget.Label,
+	tx *wallet.TxItem,
+) {
+	row := FormatTxRow(tx)
+	txidLabel.SetText(row.TXID)
+	heightLabel.SetText(row.Height)
+	amountLabel.SetText(row.NetAmount)
+	statusLabel.SetText(row.Status)
+}
+
 func (g *MainGUI) createTransactionsTab() fyne.CanvasObject {
 	// Instructions
 	instructionsText := widget.NewRichTextFromMarkdown(`
@@ -59,39 +73,14 @@ Click on a transaction to view details.
 			history := g.manager.TransactionHistory
 			if id < len(history) {
 				tx := history[id]
-				container := obj.(*fyne.Container)
+				c := obj.(*fyne.Container)
 
-				// Get the labels from the container
-				txidLabel := container.Objects[0].(*widget.Label)
-				heightLabel := container.Objects[1].(*widget.Label)
-				amountLabel := container.Objects[2].(*widget.Label)
-				statusLabel := container.Objects[3].(*widget.Label)
+				txidLabel := c.Objects[0].(*widget.Label)
+				heightLabel := c.Objects[1].(*widget.Label)
+				amountLabel := c.Objects[2].(*widget.Label)
+				statusLabel := c.Objects[3].(*widget.Label)
 
-				// Set the data
-				txidHex := hex.EncodeToString(tx.TxID[:])
-				txidLabel.SetText(fmt.Sprintf("%.8s...", txidHex))
-				heightLabel.SetText(FormatNumber(int64(tx.ConfirmHeight)))
-
-				// Format amount with sign
-				var amountText string
-				netAmount := tx.NetAmount()
-				if netAmount > 0 {
-					amountText = "+" + FormatSatoshiUint64(uint64(netAmount))
-				} else if netAmount < 0 {
-					amountText = FormatSatoshi(int64(netAmount))
-				} else {
-					amountText = FormatSatoshiUint64(0)
-				}
-				amountLabel.SetText(amountText)
-
-				// Determine status
-				var status string
-				if tx.ConfirmHeight > 0 {
-					status = "Confirmed"
-				} else {
-					status = "Pending"
-				}
-				statusLabel.SetText(status)
+				formatTxRowLabels(txidLabel, heightLabel, amountLabel, statusLabel, tx)
 			}
 		},
 	)
