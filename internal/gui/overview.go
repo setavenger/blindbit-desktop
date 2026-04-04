@@ -72,10 +72,25 @@ func (g *MainGUI) createOverviewTab() fyne.CanvasObject {
 		createHeaderLabel("Status"),
 	)
 
+	// Pre-compute sorted indices (newest first, by confirm height) once.
+	// This is updated on each refresh tick so updateItem can just index into it.
+	buildSortedIndices := func() []int {
+		history := g.manager.TransactionHistory
+		indices := make([]int, len(history))
+		for i := range indices {
+			indices[i] = i
+		}
+		sort.Slice(indices, func(a, b int) bool {
+			return history[indices[a]].ConfirmHeight > history[indices[b]].ConfirmHeight
+		})
+		return indices
+	}
+	sortedIndices := buildSortedIndices()
+
 	// Show the most recent transactions (up to 10)
 	recentTxList := widget.NewList(
 		func() int {
-			n := len(g.manager.TransactionHistory)
+			n := len(sortedIndices)
 			if n > 10 {
 				return 10
 			}
@@ -91,17 +106,9 @@ func (g *MainGUI) createOverviewTab() fyne.CanvasObject {
 		},
 		func(id widget.ListItemID, obj fyne.CanvasObject) {
 			history := g.manager.TransactionHistory
-			// Build a sorted slice of indices (newest first, by confirm height)
-			indices := make([]int, len(history))
-			for i := range indices {
-				indices[i] = i
-			}
-			sort.Slice(indices, func(a, b int) bool {
-				return history[indices[a]].ConfirmHeight > history[indices[b]].ConfirmHeight
-			})
 
-			if id < len(indices) {
-				tx := history[indices[id]]
+			if id < len(sortedIndices) {
+				tx := history[sortedIndices[id]]
 				c := obj.(*fyne.Container)
 
 				txidLabel := c.Objects[0].(*widget.Label)
@@ -151,6 +158,7 @@ func (g *MainGUI) createOverviewTab() fyne.CanvasObject {
 		defer ticker.Stop()
 		for range ticker.C {
 			updateBalance()
+			sortedIndices = buildSortedIndices()
 			recentTxList.Refresh()
 			currentScanLabel.SetText(
 				"Scanned Height: " + FormatHeightUint64(g.manager.Wallet.LastScanHeight),
