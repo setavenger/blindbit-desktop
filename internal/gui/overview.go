@@ -117,12 +117,17 @@ func (g *MainGUI) createOverviewTab() fyne.CanvasObject {
 	recentTxScroll := container.NewScroll(recentTxList)
 	recentTxScroll.SetMinSize(fyne.NewSize(440, 200))
 
-	recentTxSection := container.NewVBox(
-		recentTxTitleLabel,
-		widget.NewSeparator(),
-		headers,
-		widget.NewSeparator(),
-		recentTxScroll,
+	recentTxSection := container.NewBorder(
+		container.NewVBox(
+			recentTxTitleLabel,
+			widget.NewSeparator(),
+			headers,
+			widget.NewSeparator(),
+		), // top
+		nil,            // bottom
+		nil,            // left
+		nil,            // right
+		recentTxScroll, // center - fills remaining space
 	)
 
 	// --- Periodic updates ---
@@ -146,12 +151,17 @@ func (g *MainGUI) createOverviewTab() fyne.CanvasObject {
 	}()
 
 	// --- Main layout ---
-	content := container.NewVBox(
-		balanceSection,
-		widget.NewSeparator(),
-		scanSection,
-		widget.NewSeparator(),
-		recentTxSection,
+	content := container.NewBorder(
+		container.NewVBox(
+			balanceSection,
+			widget.NewSeparator(),
+			scanSection,
+			widget.NewSeparator(),
+		), // top
+		nil,            // bottom
+		nil,            // left
+		nil,            // right
+		recentTxSection, // center - fills remaining dashboard space
 	)
 
 	return content
