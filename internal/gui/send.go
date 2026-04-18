@@ -314,7 +314,7 @@ func (g *MainGUI) showTransactionDetails(
 		}
 
 		confirmBtn = widget.NewButton("Confirm & Broadcast", func() {
-			g.broadcastTransaction(txMetadata, recipients)
+			g.broadcastTransaction(txMetadata, recipients, confirmBtn)
 		})
 
 		if alreadyBroadcast {
@@ -323,7 +323,7 @@ func (g *MainGUI) showTransactionDetails(
 		}
 	} else {
 		confirmBtn = widget.NewButton("Confirm & Broadcast", func() {
-			g.broadcastTransaction(txMetadata, recipients)
+			g.broadcastTransaction(txMetadata, recipients, confirmBtn)
 		})
 		confirmBtn.Disable()
 	}
@@ -344,6 +344,7 @@ func (g *MainGUI) showTransactionDetails(
 func (g *MainGUI) broadcastTransaction(
 	txMetadata *wallet.TxMetadata,
 	recipients []wallet.Recipient,
+	confirmBtn *widget.Button,
 ) {
 	if txMetadata.Tx == nil {
 		dialog.ShowError(fmt.Errorf("no transaction to broadcast"), g.window)
@@ -381,6 +382,11 @@ func (g *MainGUI) broadcastTransaction(
 	if err != nil {
 		dialog.ShowError(fmt.Errorf("failed to record transaction: %v", err), g.window)
 		return
+	}
+
+	if confirmBtn != nil {
+		confirmBtn.Disable()
+		confirmBtn.SetText("Already Broadcast")
 	}
 
 	// Refresh transaction list to show the new unconfirmed transaction
