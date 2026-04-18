@@ -80,7 +80,16 @@ func (g *MainGUI) createOverviewTab() fyne.CanvasObject {
 			indices[i] = i
 		}
 		sort.Slice(indices, func(a, b int) bool {
-			return history[indices[a]].ConfirmHeight > history[indices[b]].ConfirmHeight
+			ia, ib := indices[a], indices[b]
+			ha, hb := history[ia].ConfirmHeight, history[ib].ConfirmHeight
+			pa, pb := ha == 0, hb == 0 // matches FormatTxRow: Pending iff ConfirmHeight == 0
+			if pa != pb {
+				return pa // pending first
+			}
+			if ha != hb {
+				return ha > hb // newest confirmed first
+			}
+			return ia > ib // same height: preserve newer-in-history first (higher index)
 		})
 		return indices
 	}
