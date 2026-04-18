@@ -3,8 +3,11 @@ package gui
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"strconv"
 
 	"fyne.io/fyne/v2"
@@ -13,9 +16,11 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/setavenger/blindbit-desktop/internal/configs"
 	"github.com/setavenger/blindbit-desktop/internal/controller"
 	"github.com/setavenger/blindbit-desktop/internal/storage"
 	"github.com/setavenger/blindbit-lib/logging"
+	"github.com/setavenger/blindbit-lib/types"
 	"github.com/setavenger/blindbit-lib/utils"
 	"github.com/setavenger/blindbit-lib/wallet"
 )
@@ -36,6 +41,67 @@ func (g *MainGUI) createSendTab() fyne.CanvasObject {
 	amountLabel := widget.NewLabel("Amount (satoshis):")
 	feeRateLabel := widget.NewLabel("Fee Rate (sat/vB):")
 
+	var fastFee, middleFee, slowFee uint
+
+	feeEstimationEnabled := g.manager.FeeEstimationEnabled
+
+	// Fee suggestion buttons with closures that reference the fee variables
+	initialFeeLabel := func(tier string) string {
+		if feeEstimationEnabled {
+			return tier + ": loading..."
+		}
+		return tier + ": disabled"
+	}
+
+	fastFeeBtn := widget.NewButton(initialFeeLabel("fast"), func() {
+		if fastFee > 0 {
+			feeRateEntry.SetText(fmt.Sprintf("%d", fastFee))
+		}
+	})
+	fastFeeBtn.Disable()
+
+	middleFeeBtn := widget.NewButton(initialFeeLabel("middle"), func() {
+		if middleFee > 0 {
+			feeRateEntry.SetText(fmt.Sprintf("%d", middleFee))
+		}
+	})
+	middleFeeBtn.Disable()
+
+	slowFeeBtn := widget.NewButton(initialFeeLabel("slow"), func() {
+		if slowFee > 0 {
+			feeRateEntry.SetText(fmt.Sprintf("%d", slowFee))
+		}
+	})
+	slowFeeBtn.Disable()
+
+	// Only fetch fee estimates when the user has opted in. Fetching contacts
+	// mempool.space, which can contribute to network fingerprinting.
+	if feeEstimationEnabled {
+		go func() {
+			estimates, err := getCurrentFeeEstimates(g.manager.GetNetwork())
+			if err != nil {
+				logging.L.Err(err).Msg("failed to fetch fee estimates")
+				fastFeeBtn.SetText("fast: error")
+				middleFeeBtn.SetText("middle: error")
+				slowFeeBtn.SetText("slow: error")
+				return
+			}
+
+			fastFee = estimates.FastestFee
+			middleFee = estimates.HalfHourFee
+			slowFee = estimates.HourFee
+
+			fastFeeBtn.SetText(fmt.Sprintf("fast: %d sat/vB", fastFee))
+			fastFeeBtn.Enable()
+
+			middleFeeBtn.SetText(fmt.Sprintf("middle: %d sat/vB", middleFee))
+			middleFeeBtn.Enable()
+
+			slowFeeBtn.SetText(fmt.Sprintf("slow: %d sat/vB", slowFee))
+			slowFeeBtn.Enable()
+		}()
+	}
+
 	// Preview button
 	previewBtn := widget.NewButton("Send Transaction", func() {
 		g.previewTransaction(recipientEntry.Text, amountEntry.Text, feeRateEntry.Text)
@@ -48,7 +114,7 @@ func (g *MainGUI) createSendTab() fyne.CanvasObject {
 	// sendBtn.Disable()
 
 	// Form layout
-	form := container.NewVBox(
+	formItems := []fyne.CanvasObject{
 		recipientLabel,
 		recipientEntry,
 		widget.NewSeparator(),
@@ -57,6 +123,23 @@ func (g *MainGUI) createSendTab() fyne.CanvasObject {
 		widget.NewSeparator(),
 		feeRateLabel,
 		feeRateEntry,
+		container.NewHBox(
+			fastFeeBtn,
+			middleFeeBtn,
+			slowFeeBtn,
+		),
+	}
+	if feeEstimationEnabled {
+		formItems = append(formItems, widget.NewLabel(
+			"Suggested fee rates (fast / middle / slow) are from mempool.space.",
+		))
+	} else {
+		formItems = append(formItems, widget.NewLabel(
+			"Fee estimation is disabled. Enable it in Settings to fetch\n"+
+				"suggested fee rates from mempool.space.",
+		))
+	}
+	formItems = append(formItems,
 		widget.NewSeparator(),
 		container.NewHBox(
 			previewBtn,
@@ -64,7 +147,7 @@ func (g *MainGUI) createSendTab() fyne.CanvasObject {
 		),
 	)
 
-	return form
+	return container.NewVBox(formItems...)
 }
 
 func (g *MainGUI) previewTransaction(recipient, amountStr, feeRateStr string) {
@@ -318,4 +401,48 @@ func (g *MainGUI) broadcastTransaction(
 	}()
 
 	// TODO: Clear form
+}
+
+type MempoolSpaceFeeSuggestions struct {
+	FastestFee  uint `json:"fastestFee"`
+	HalfHourFee uint `json:"halfHourFee"`
+	HourFee     uint `json:"hourFee"`
+	EconomyFee  uint `json:"economyFee"`
+	MinimumFee  uint `json:"minimumFee"`
+}
+
+func getCurrentFeeEstimates(
+	network types.Network,
+) (
+	estimates MempoolSpaceFeeSuggestions,
+	err error,
+) {
+	/*
+		❯ curl -sSL "https://mempool.space/api/v1/fees/recommended"
+		{"fastestFee":2,"halfHourFee":1,"hourFee":1,"economyFee":1,"minimumFee":1}%
+	*/
+
+	url := configs.GetMempoolSpaceURL(network) + "/api/v1/fees/recommended"
+
+	var resp *http.Response
+	resp, err = http.Get(url)
+	if err != nil {
+		logging.L.Err(err).Str("url", url).Msg("failed to get current fee estimates")
+		return
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logging.L.Err(err).Str("url", url).Msg("failed to read response body")
+		return
+	}
+
+	err = json.Unmarshal(body, &estimates)
+	if err != nil {
+		logging.L.Err(err).Str("url", url).Msg("failed to unmarshal response body")
+		return
+	}
+
+	return estimates, nil
 }

@@ -41,6 +41,18 @@ func (g *MainGUI) createSettingsTab() fyne.CanvasObject {
 	minChangeEntry := widget.NewEntry()
 	minChangeEntry.SetText(FormatUint64(g.manager.MinChangeAmount))
 
+	// Fee estimation (external provider - privacy tradeoff)
+	feeEstimationLabel := widget.NewLabel("Fee Estimation:")
+	feeEstimationCheck := widget.NewCheck(
+		"Enable fee rate suggestions from mempool.space",
+		nil,
+	)
+	feeEstimationCheck.SetChecked(g.manager.FeeEstimationEnabled)
+	feeEstimationHint := widget.NewLabel(
+		"When enabled, the app contacts mempool.space to fetch suggested fee\n" +
+			"rates. This can be used to fingerprint you. Leave off for best privacy.",
+	)
+
 	// Save button
 	saveBtn := widget.NewButton("Save Settings", func() {
 		g.saveSettings(
@@ -49,6 +61,7 @@ func (g *MainGUI) createSettingsTab() fyne.CanvasObject {
 			dustLimitEntry.Text,
 			minChangeEntry.Text,
 			useTLSCheck.Checked,
+			feeEstimationCheck.Checked,
 		)
 	})
 
@@ -60,6 +73,7 @@ func (g *MainGUI) createSettingsTab() fyne.CanvasObject {
 			dustLimitEntry,
 			minChangeEntry,
 			useTLSCheck,
+			feeEstimationCheck,
 		)
 	})
 
@@ -80,6 +94,10 @@ func (g *MainGUI) createSettingsTab() fyne.CanvasObject {
 		minChangeLabel,
 		minChangeEntry,
 		widget.NewSeparator(),
+		feeEstimationLabel,
+		feeEstimationCheck,
+		feeEstimationHint,
+		widget.NewSeparator(),
 		container.NewHBox(resetBtn, saveBtn),
 	)
 
@@ -89,6 +107,7 @@ func (g *MainGUI) createSettingsTab() fyne.CanvasObject {
 func (g *MainGUI) saveSettings(
 	oracleAddr, birthHeightStr, dustLimitStr, minChangeStr string,
 	useTLS bool,
+	feeEstimationEnabled bool,
 ) {
 	// Parse birth height
 	if birthHeightStr != "" {
@@ -119,6 +138,7 @@ func (g *MainGUI) saveSettings(
 	// Set oracle address
 	g.manager.OracleAddress = oracleAddr
 	g.manager.OracleUseTLS = useTLS
+	g.manager.FeeEstimationEnabled = feeEstimationEnabled
 
 	// Save the manager
 	if err := storage.SavePlain(g.manager.DataDir, g.manager); err != nil {
@@ -137,7 +157,8 @@ func (g *MainGUI) resetToDefaults(
 	birthHeightEntry,
 	dustLimitEntry,
 	minChangeEntry *widget.Entry,
-	useTLSCheck *widget.Check,
+	useTLSCheck,
+	feeEstimationCheck *widget.Check,
 ) {
 	// Reset to default values
 	defaultOracleAddr := configs.DefaultOracleAddressForNetwork(g.manager.Wallet.Network)
@@ -155,6 +176,9 @@ func (g *MainGUI) resetToDefaults(
 
 	useTLSCheck.SetChecked(true)
 	g.manager.OracleUseTLS = true
+
+	feeEstimationCheck.SetChecked(true)
+	g.manager.FeeEstimationEnabled = true
 
 	dialog.ShowInformation("Reset", "Settings reset to defaults", g.window)
 }
