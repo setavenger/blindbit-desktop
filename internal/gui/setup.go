@@ -447,6 +447,18 @@ func (s *SetupWizard) showConfigurationDialog(manager *controller.Manager) {
 	minChangeEntry.SetText(fmt.Sprintf("%d", configs.DefaultMinimumAmount))
 	minChangeLabel := widget.NewLabel("Min Change Amount (satoshis):")
 
+	// Fee estimation via mempool.space (privacy tradeoff; user can disable).
+	feeEstimationLabel := widget.NewLabel("Fee Estimation:")
+	feeEstimationCheck := widget.NewCheck(
+		"Enable fee rate suggestions from mempool.space",
+		nil,
+	)
+	feeEstimationCheck.SetChecked(true)
+	feeEstimationHint := widget.NewLabel(
+		"When enabled, the app contacts mempool.space to fetch suggested fee\n" +
+			"rates. This can be used to fingerprint you. Turn off for stronger privacy.",
+	)
+
 	saveBtn := widget.NewButton("Save & Continue", func() {
 		// Parse birth height
 		if birthHeightEntry.Text != "" {
@@ -472,6 +484,7 @@ func (s *SetupWizard) showConfigurationDialog(manager *controller.Manager) {
 		// Set oracle address
 		manager.OracleAddress = oracleEntry.Text
 		manager.OracleUseTLS = useTLSCheck.Checked
+		manager.FeeEstimationEnabled = feeEstimationCheck.Checked
 
 		// Save the manager
 		if err := storage.SavePlain(s.dataDir, manager); err != nil {
@@ -502,6 +515,9 @@ func (s *SetupWizard) showConfigurationDialog(manager *controller.Manager) {
 		dustLimitEntry,
 		minChangeLabel,
 		minChangeEntry,
+		feeEstimationLabel,
+		feeEstimationCheck,
+		feeEstimationHint,
 		widget.NewSeparator(),
 		container.NewHBox(backBtn, saveBtn),
 	)

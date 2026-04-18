@@ -43,53 +43,64 @@ func (g *MainGUI) createSendTab() fyne.CanvasObject {
 
 	var fastFee, middleFee, slowFee uint
 
+	feeEstimationEnabled := g.manager.FeeEstimationEnabled
+
 	// Fee suggestion buttons with closures that reference the fee variables
-	fastFeeBtn := widget.NewButton("fast: loading...", func() {
+	initialFeeLabel := func(tier string) string {
+		if feeEstimationEnabled {
+			return tier + ": loading..."
+		}
+		return tier + ": disabled"
+	}
+
+	fastFeeBtn := widget.NewButton(initialFeeLabel("fast"), func() {
 		if fastFee > 0 {
 			feeRateEntry.SetText(fmt.Sprintf("%d", fastFee))
 		}
 	})
 	fastFeeBtn.Disable()
 
-	middleFeeBtn := widget.NewButton("middle: loading...", func() {
+	middleFeeBtn := widget.NewButton(initialFeeLabel("middle"), func() {
 		if middleFee > 0 {
 			feeRateEntry.SetText(fmt.Sprintf("%d", middleFee))
 		}
 	})
 	middleFeeBtn.Disable()
 
-	slowFeeBtn := widget.NewButton("slow: loading...", func() {
+	slowFeeBtn := widget.NewButton(initialFeeLabel("slow"), func() {
 		if slowFee > 0 {
 			feeRateEntry.SetText(fmt.Sprintf("%d", slowFee))
 		}
 	})
 	slowFeeBtn.Disable()
 
-	// Fetch fee estimates asynchronously
-	go func() {
-		estimates, err := getCurrentFeeEstimates(g.manager.GetNetwork())
-		if err != nil {
-			logging.L.Err(err).Msg("failed to fetch fee estimates")
-			// Update buttons to show error state
-			fastFeeBtn.SetText("fast: error")
-			middleFeeBtn.SetText("middle: error")
-			slowFeeBtn.SetText("slow: error")
-			return
-		}
+	// Only fetch fee estimates when the user has opted in. Fetching contacts
+	// mempool.space, which can contribute to network fingerprinting.
+	if feeEstimationEnabled {
+		go func() {
+			estimates, err := getCurrentFeeEstimates(g.manager.GetNetwork())
+			if err != nil {
+				logging.L.Err(err).Msg("failed to fetch fee estimates")
+				fastFeeBtn.SetText("fast: error")
+				middleFeeBtn.SetText("middle: error")
+				slowFeeBtn.SetText("slow: error")
+				return
+			}
 
-		fastFee = estimates.FastestFee
-		middleFee = estimates.HalfHourFee
-		slowFee = estimates.HourFee
+			fastFee = estimates.FastestFee
+			middleFee = estimates.HalfHourFee
+			slowFee = estimates.HourFee
 
-		fastFeeBtn.SetText(fmt.Sprintf("fast: %d sat/vB", fastFee))
-		fastFeeBtn.Enable()
+			fastFeeBtn.SetText(fmt.Sprintf("fast: %d sat/vB", fastFee))
+			fastFeeBtn.Enable()
 
-		middleFeeBtn.SetText(fmt.Sprintf("middle: %d sat/vB", middleFee))
-		middleFeeBtn.Enable()
+			middleFeeBtn.SetText(fmt.Sprintf("middle: %d sat/vB", middleFee))
+			middleFeeBtn.Enable()
 
-		slowFeeBtn.SetText(fmt.Sprintf("slow: %d sat/vB", slowFee))
-		slowFeeBtn.Enable()
-	}()
+			slowFeeBtn.SetText(fmt.Sprintf("slow: %d sat/vB", slowFee))
+			slowFeeBtn.Enable()
+		}()
+	}
 
 	// Preview button
 	previewBtn := widget.NewButton("Send Transaction", func() {
@@ -103,7 +114,7 @@ func (g *MainGUI) createSendTab() fyne.CanvasObject {
 	// sendBtn.Disable()
 
 	// Form layout
-	form := container.NewVBox(
+	formItems := []fyne.CanvasObject{
 		recipientLabel,
 		recipientEntry,
 		widget.NewSeparator(),
@@ -117,6 +128,18 @@ func (g *MainGUI) createSendTab() fyne.CanvasObject {
 			middleFeeBtn,
 			slowFeeBtn,
 		),
+	}
+	if feeEstimationEnabled {
+		formItems = append(formItems, widget.NewLabel(
+			"Suggested fee rates (fast / middle / slow) are from mempool.space.",
+		))
+	} else {
+		formItems = append(formItems, widget.NewLabel(
+			"Fee estimation is disabled. Enable it in Settings to fetch\n"+
+				"suggested fee rates from mempool.space.",
+		))
+	}
+	formItems = append(formItems,
 		widget.NewSeparator(),
 		container.NewHBox(
 			previewBtn,
@@ -124,7 +147,7 @@ func (g *MainGUI) createSendTab() fyne.CanvasObject {
 		),
 	)
 
-	return form
+	return container.NewVBox(formItems...)
 }
 
 func (g *MainGUI) previewTransaction(recipient, amountStr, feeRateStr string) {

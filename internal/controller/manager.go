@@ -25,6 +25,11 @@ type Manager struct {
 	OracleAddress   string         `json:"oracle_address"` // for now only gRPC possible will need a flag and options in future
 	OracleUseTLS    bool           `json:"oracle_use_tls"`
 
+	// FeeEstimationEnabled toggles fetching fee rate suggestions from
+	// mempool.space. Enabled by default; disable in Settings if you want to
+	// avoid contacting a third-party service (fingerprinting tradeoff).
+	FeeEstimationEnabled bool `json:"fee_estimation_enabled"`
+
 	TransactionHistory wallet.TxHistory     `json:"transaction_history"`
 	OracleClient       *grpc.OracleClient   `json:"-"`
 	Scanner            *scannerv2.ScannerV2 `json:"-"`
@@ -42,16 +47,17 @@ type Manager struct {
 
 func NewManager() *Manager {
 	return &Manager{
-		Wallet:              &wallet.Wallet{},
-		DataDir:             "",
-		DustLimit:           configs.DefaultMinimumAmount,       // default
-		LabelCount:          configs.DefaultLabelCount,          // default
-		MinChangeAmount:     configs.DefaultMinimumAmount,       // default
-		OracleAddress:       configs.DefaultOracleAddressSignet, // set basic default
-		TransactionHistory:  wallet.TxHistory{},                 // Initialize empty TxHistory
-		Scanner:             nil,                                // Don't initialize scanner until needed
-		GUIScanProgressChan: make(chan uint32, 100),             // Buffer for GUI updates
-		StreamEndChan:       make(chan bool, 10),                // Buffer for stream end signals
+		Wallet:               &wallet.Wallet{},
+		DataDir:              "",
+		DustLimit:            configs.DefaultMinimumAmount,       // default
+		LabelCount:           configs.DefaultLabelCount,          // default
+		MinChangeAmount:      configs.DefaultMinimumAmount,       // default
+		OracleAddress:        configs.DefaultOracleAddressSignet, // set basic default
+		FeeEstimationEnabled: true,
+		TransactionHistory:   wallet.TxHistory{},     // Initialize empty TxHistory
+		Scanner:              nil,                  // Don't initialize scanner until needed
+		GUIScanProgressChan:  make(chan uint32, 100), // Buffer for GUI updates
+		StreamEndChan:        make(chan bool, 10),    // Buffer for stream end signals
 	}
 }
 
@@ -109,7 +115,19 @@ func (m *Manager) Serialise() ([]byte, error) {
 }
 
 func (m *Manager) DeSerialise(data []byte) error {
-	return json.Unmarshal(data, m)
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	_, hasFeeEstimation := raw["fee_estimation_enabled"]
+	if err := json.Unmarshal(data, m); err != nil {
+		return err
+	}
+	if !hasFeeEstimation {
+		// Wallets saved before this field existed default to on.
+		m.FeeEstimationEnabled = true
+	}
+	return nil
 }
 
 /* Scanner stuff */
