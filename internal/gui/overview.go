@@ -1,13 +1,13 @@
 package gui
 
 import (
-	"sort"
 	"sync"
 	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
+	"github.com/setavenger/blindbit-lib/wallet"
 )
 
 func (g *MainGUI) createOverviewTab() fyne.CanvasObject {
@@ -71,36 +71,19 @@ func (g *MainGUI) createOverviewTab() fyne.CanvasObject {
 		createHeaderLabel("Status"),
 	)
 
-	// Pre-compute sorted indices (newest first, by confirm height) once.
-	// This is updated on each refresh tick so updateItem can just index into it.
-	buildSortedIndices := func() []int {
-		history := g.manager.TransactionHistory
-		indices := make([]int, len(history))
-		for i := range indices {
-			indices[i] = i
-		}
-		sort.Slice(indices, func(a, b int) bool {
-			ia, ib := indices[a], indices[b]
-			ha, hb := history[ia].ConfirmHeight, history[ib].ConfirmHeight
-			pa, pb := ha == 0, hb == 0 // matches FormatTxRow: Pending iff ConfirmHeight == 0
-			if pa != pb {
-				return pa // pending first
-			}
-			if ha != hb {
-				return ha > hb // newest confirmed first
-			}
-			return ia > ib // same height: preserve newer-in-history first (higher index)
-		})
-		return indices
+	// Pre-compute display order (see sortedTransactionHistory). Updated on each
+	// refresh tick so updateItem can index into it.
+	buildSortedHistory := func() []*wallet.TxItem {
+		return sortedTransactionHistory(g.manager.TransactionHistory)
 	}
 	var mu sync.RWMutex
-	sortedIndices := buildSortedIndices()
+	orderedHistory := buildSortedHistory()
 
 	// Show the most recent transactions (up to 10)
 	recentTxList := widget.NewList(
 		func() int {
 			mu.RLock()
-			n := len(sortedIndices)
+			n := len(orderedHistory)
 			mu.RUnlock()
 			if n > 10 {
 				return 10
@@ -108,30 +91,18 @@ func (g *MainGUI) createOverviewTab() fyne.CanvasObject {
 			return n
 		},
 		func() fyne.CanvasObject {
-			return container.NewGridWithColumns(4,
-				widget.NewLabel(""), // TXID
-				widget.NewLabel(""), // Block Height
-				widget.NewLabel(""), // Net Amount
-				widget.NewLabel(""), // Status
-			)
+			return newTxHistoryRowGrid()
 		},
 		func(id widget.ListItemID, obj fyne.CanvasObject) {
-			history := g.manager.TransactionHistory
-
 			mu.RLock()
-			idxLen := len(sortedIndices)
-			var txIdx int
-			if id < idxLen {
-				txIdx = sortedIndices[id]
+			historyLen := len(orderedHistory)
+			var tx *wallet.TxItem
+			if id < historyLen {
+				tx = orderedHistory[id]
 			}
 			mu.RUnlock()
 
-			if id < idxLen {
-				// Guard against the history slice being replaced with a shorter one.
-				if txIdx >= len(history) {
-					return
-				}
-				tx := history[txIdx]
+			if id < historyLen && tx != nil {
 				c := obj.(*fyne.Container)
 
 				txidLabel := c.Objects[0].(*widget.Label)
@@ -139,11 +110,7 @@ func (g *MainGUI) createOverviewTab() fyne.CanvasObject {
 				amountLabel := c.Objects[2].(*widget.Label)
 				statusLabel := c.Objects[3].(*widget.Label)
 
-				row := FormatTxRow(tx)
-				txidLabel.SetText(row.TXID)
-				heightLabel.SetText(row.Height)
-				amountLabel.SetText(row.NetAmount)
-				statusLabel.SetText(row.Status)
+				formatTxRowLabels(txidLabel, heightLabel, amountLabel, statusLabel, tx)
 			}
 		},
 	)
@@ -164,9 +131,9 @@ func (g *MainGUI) createOverviewTab() fyne.CanvasObject {
 		defer ticker.Stop()
 		for range ticker.C {
 			updateBalance()
-			newIndices := buildSortedIndices()
+			newHistory := buildSortedHistory()
 			mu.Lock()
-			sortedIndices = newIndices
+			orderedHistory = newHistory
 			mu.Unlock()
 			recentTxList.Refresh()
 			currentScanLabel.SetText(

@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/url"
+	"sort"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -14,6 +15,57 @@ import (
 	"github.com/setavenger/blindbit-desktop/internal/configs"
 	"github.com/setavenger/blindbit-lib/wallet"
 )
+
+// sortedTransactionHistory returns a snapshot for list display:
+// pending (unconfirmed, ConfirmHeight <= 0) first, then by confirmation height
+// descending, then by source-slice index descending for ties.
+func sortedTransactionHistory(h wallet.TxHistory) []*wallet.TxItem {
+	type row struct {
+		idx int
+		tx  *wallet.TxItem
+	}
+	rows := make([]row, len(h))
+	for i := range h {
+		rows[i] = row{idx: i, tx: h[i]}
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		a, b := rows[i], rows[j]
+		ha, hb := a.tx.ConfirmHeight, b.tx.ConfirmHeight
+		aPending := ha <= 0
+		bPending := hb <= 0
+
+		// Special-case pending transactions: always place them above confirmed ones,
+		// independent of numeric height ordering (e.g. pending height can be -1).
+		if aPending && !bPending {
+			return true
+		}
+		if !aPending && bPending {
+			return false
+		}
+
+		// Once both items are in the same bucket (both pending or both confirmed),
+		// sort by confirmation height descending.
+		if ha != hb {
+			return ha > hb
+		}
+		return a.idx > b.idx
+	})
+	ordered := make([]*wallet.TxItem, len(rows))
+	for i := range rows {
+		ordered[i] = rows[i].tx
+	}
+	return ordered
+}
+
+// newTxHistoryRowGrid returns the 4-column row template used by transaction lists.
+func newTxHistoryRowGrid() fyne.CanvasObject {
+	return container.NewGridWithColumns(4,
+		widget.NewLabel(""), // TXID
+		widget.NewLabel(""), // Block Height
+		widget.NewLabel(""), // Net Amount
+		widget.NewLabel(""), // Status
+	)
+}
 
 // formatTxRowLabels populates the four labels in a transaction list row using
 // FormatTxRow so both the Transactions tab and the Dashboard share identical
@@ -55,33 +107,34 @@ Click on a transaction to view details.
 		createHeaderLabel("Status"),
 	)
 
-	// Transaction list with proper columns
+	var orderedHistory []*wallet.TxItem
+	rebuildOrder := func() {
+		orderedHistory = sortedTransactionHistory(g.manager.TransactionHistory)
+	}
+	rebuildOrder()
+
+	// Transaction list with proper columns (same ordering as Dashboard recent txs)
 	txList := widget.NewList(
 		func() int {
-			return len(g.manager.TransactionHistory)
+			rebuildOrder()
+			return len(orderedHistory)
 		},
 		func() fyne.CanvasObject {
-			// Create a container with 4 labels for each row
-			return container.NewGridWithColumns(4,
-				widget.NewLabel(""), // TXID
-				widget.NewLabel(""), // Block Height
-				widget.NewLabel(""), // Net Amount
-				widget.NewLabel(""), // Status
-			)
+			return newTxHistoryRowGrid()
 		},
 		func(id widget.ListItemID, obj fyne.CanvasObject) {
-			history := g.manager.TransactionHistory
-			if id < len(history) {
-				tx := history[id]
-				c := obj.(*fyne.Container)
-
-				txidLabel := c.Objects[0].(*widget.Label)
-				heightLabel := c.Objects[1].(*widget.Label)
-				amountLabel := c.Objects[2].(*widget.Label)
-				statusLabel := c.Objects[3].(*widget.Label)
-
-				formatTxRowLabels(txidLabel, heightLabel, amountLabel, statusLabel, tx)
+			if int(id) >= len(orderedHistory) {
+				return
 			}
+			tx := orderedHistory[id]
+			c := obj.(*fyne.Container)
+
+			txidLabel := c.Objects[0].(*widget.Label)
+			heightLabel := c.Objects[1].(*widget.Label)
+			amountLabel := c.Objects[2].(*widget.Label)
+			statusLabel := c.Objects[3].(*widget.Label)
+
+			formatTxRowLabels(txidLabel, heightLabel, amountLabel, statusLabel, tx)
 		},
 	)
 
@@ -90,10 +143,11 @@ Click on a transaction to view details.
 
 	// Set up click handler for transaction details
 	txList.OnSelected = func(id widget.ListItemID) {
-		if id < len(g.manager.TransactionHistory) {
-			tx := g.manager.TransactionHistory[id]
-			g.showTransactionHistoryDetails(tx)
+		rebuildOrder()
+		if int(id) >= len(orderedHistory) {
+			return
 		}
+		g.showTransactionHistoryDetails(orderedHistory[id])
 	}
 
 	// Create a scrollable container for the list (like UTXOs)
