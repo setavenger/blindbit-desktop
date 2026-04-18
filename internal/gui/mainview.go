@@ -37,11 +37,12 @@ func NewMainGUI(
 
 func (g *MainGUI) setupTabs() {
 	g.tabs = container.NewAppTabs(
+		container.NewTabItem("Dashboard", g.createOverviewTab()),
+		container.NewTabItem("Receive", g.createReceiveTab()),
+		container.NewTabItem("Send", g.createSendTab()),
+		container.NewTabItem("Transactions", g.createTransactionsTab()),
 		container.NewTabItem("Scanning", g.createScanningTab()),
 		container.NewTabItem("UTXOs", g.createUTXOsTab()),
-		container.NewTabItem("Send", g.createSendTab()),
-		container.NewTabItem("Receive", g.createReceiveTab()),
-		container.NewTabItem("Transactions", g.createTransactionsTab()),
 		container.NewTabItem("Settings", g.createSettingsTab()),
 	)
 }

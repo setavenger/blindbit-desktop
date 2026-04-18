@@ -1,11 +1,15 @@
 package gui
 
 import (
+	"encoding/hex"
+	"fmt"
 	"strconv"
 	"strings"
 
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
+
+	"github.com/setavenger/blindbit-lib/wallet"
 )
 
 // FormatNumber formats a number with thousand separators (commas) using golang.org/x/text
@@ -62,4 +66,40 @@ func ParseFormattedUint64(str string) (uint64, error) {
 	// Remove commas
 	cleanStr := strings.ReplaceAll(str, ",", "")
 	return strconv.ParseUint(cleanStr, 10, 64)
+}
+
+// TxRowData holds the formatted strings for a single transaction row.
+type TxRowData struct {
+	TXID      string // truncated hex (8 chars + "...")
+	Height    string // formatted block height
+	NetAmount string // formatted net amount with sign
+	Status    string // "Confirmed" or "Pending"
+}
+
+// FormatTxRow extracts the display strings for a transaction row, shared between
+// the Dashboard's recent-transaction list and the full Transactions tab.
+func FormatTxRow(tx *wallet.TxItem) TxRowData {
+	txidHex := hex.EncodeToString(tx.TxID[:])
+
+	netAmount := tx.NetAmount()
+	var amountText string
+	if netAmount > 0 {
+		amountText = "+" + FormatSatoshiUint64(uint64(netAmount))
+	} else if netAmount < 0 {
+		amountText = FormatSatoshi(int64(netAmount))
+	} else {
+		amountText = FormatSatoshiUint64(0)
+	}
+
+	status := "Pending"
+	if tx.ConfirmHeight > 0 {
+		status = "Confirmed"
+	}
+
+	return TxRowData{
+		TXID:      fmt.Sprintf("%.8s...", txidHex),
+		Height:    FormatNumber(int64(tx.ConfirmHeight)),
+		NetAmount: amountText,
+		Status:    status,
+	}
 }
