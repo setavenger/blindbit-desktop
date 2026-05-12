@@ -10,13 +10,11 @@ import (
 	"fyne.io/fyne/v2/driver/desktop"
 	"github.com/rs/zerolog"
 
-	"github.com/setavenger/blindbit-desktop/internal/configs"
 	"github.com/setavenger/blindbit-desktop/internal/controller"
 	"github.com/setavenger/blindbit-desktop/internal/gui"
 	"github.com/setavenger/blindbit-desktop/internal/setup"
 	"github.com/setavenger/blindbit-desktop/internal/storage"
 	"github.com/setavenger/blindbit-lib/logging"
-	"github.com/setavenger/blindbit-lib/utils"
 	"github.com/spf13/pflag"
 )
 
@@ -36,32 +34,19 @@ func init() {
 }
 
 func main() {
-	// Create a new Fyne application
 	myApp := app.New()
+	myApp.SetIcon(myApp.Icon())
 
-	myApp.SetIcon(myApp.Icon()) // You can replace this with a custom icon
-
-	// Create the main window
 	mainWindow := myApp.NewWindow("BlindBit Desktop")
-
 	mainWindow.Resize(fyne.NewSize(1000, 750))
 	mainWindow.CenterOnScreen()
 
-	// Try to load existing wallet manager
-	walletManager, exists, err := setup.NewManagerWithDataDir(dataDir)
+	// Resolve and create the data directory; check if a wallet already exists.
+	resolvedDataDir, walletExists, err := setup.PrepareDataDir(dataDir)
 	if err != nil {
-		logging.L.Err(err).Msg("Failed to load existing wallet manager")
-		// Show error dialog and exit
-		dialog.ShowError(fmt.Errorf("failed to load wallet: %v", err), mainWindow)
+		logging.L.Err(err).Msg("failed to prepare data directory")
+		dialog.ShowError(fmt.Errorf("failed to prepare data directory: %v", err), mainWindow)
 		return
-	}
-
-	// Get the resolved data directory for consistency
-	resolvedDataDir := dataDir
-	if resolvedDataDir == "" {
-		resolvedDataDir = configs.DefaultDataDir()
-	} else {
-		resolvedDataDir = utils.ResolvePath(resolvedDataDir)
 	}
 
 	if err = logging.EnableFileLogging(resolvedDataDir, "debug.log"); err != nil {
@@ -69,75 +54,76 @@ func main() {
 		logging.L.Fatal().Err(err).Msg("error setting log file")
 	}
 
-	if !exists {
-		// No wallet exists, show setup wizard
-		setupWizard := gui.NewSetupWizard(
-			myApp, mainWindow, resolvedDataDir, func(manager *controller.Manager) {
-				// Initialize scanner before showing main GUI
-				if err := manager.ConstructScanner(context.TODO()); err != nil {
-					logging.L.Err(err).Msg("failed to construct scanner after setup")
-					dialog.ShowError(fmt.Errorf("failed to construct scanner: %v", err), mainWindow)
-					return
-				}
+	// walletManager and sessionPassword are set once the user completes setup or
+	// unlock. The deferred save uses them to write an encrypted wallet on exit.
+	var walletManager *controller.Manager
+	var sessionPassword []byte
 
-				// Start channel handling and background scanning
-				manager.StartChannelHandling(context.TODO(), func() error {
-					return storage.SavePlain(manager.DataDir, manager)
-				})
+	defer func() {
+		if walletManager != nil {
+			if err := storage.SaveWithPassword(walletManager.DataDir, walletManager, sessionPassword); err != nil {
+				logging.L.Err(err).Msg("failed to save wallet on exit")
+			}
+		}
+	}()
 
-				go func() {
-					watchStartHeight := manager.Wallet.LastScanHeight
-					if watchStartHeight == 0 {
-						watchStartHeight = manager.Wallet.BirthHeight
-					}
-					if err := manager.Scanner.Watch(context.TODO(), uint32(watchStartHeight)); err != nil {
-						logging.L.Err(err).Msg("failed to watch scanner")
-						dialog.ShowError(fmt.Errorf("failed to watch scanner: %v", err), mainWindow)
-						return
-					}
-				}()
-
-				walletManager = manager
-				// Setup completed, show main GUI
-				mainGUI := gui.NewMainGUI(myApp, mainWindow, manager)
-				mainWindow.SetContent(mainGUI.GetContent())
-			},
-		)
-		setupWizard.Show()
-	} else {
-		// Set the DataDir on the loaded manager
+	// startMainGUI wires up the scanner and shows the main window. It is called
+	// from both the setup-wizard callback and the unlock-screen callback.
+	startMainGUI := func(manager *controller.Manager, password []byte) {
+		sessionPassword = password
+		walletManager = manager
 		walletManager.DataDir = resolvedDataDir
 
-		// Initialize scanner before showing main GUI
-		if err := walletManager.ConstructScanner(context.TODO()); err != nil {
+		if err := manager.ConstructScanner(context.TODO()); err != nil {
 			logging.L.Err(err).Msg("failed to construct scanner")
 			dialog.ShowError(fmt.Errorf("failed to construct scanner: %v", err), mainWindow)
 			return
 		}
 
-		// Start channel handling and background scanning
-		walletManager.StartChannelHandling(context.TODO(), func() error {
-			return storage.SavePlain(walletManager.DataDir, walletManager)
+		manager.StartChannelHandling(context.TODO(), func() error {
+			return storage.SaveWithPassword(manager.DataDir, manager, password)
 		})
 
 		go func() {
-			err := walletManager.Scanner.Watch(
-				context.TODO(), uint32(walletManager.Wallet.LastScanHeight),
-			)
-			if err != nil {
+			watchStartHeight := manager.Wallet.LastScanHeight
+			if watchStartHeight == 0 {
+				watchStartHeight = manager.Wallet.BirthHeight
+			}
+			if err := manager.Scanner.Watch(context.TODO(), uint32(watchStartHeight)); err != nil {
 				logging.L.Err(err).Msg("failed to watch scanner")
 				dialog.ShowError(fmt.Errorf("failed to watch scanner: %v", err), mainWindow)
-				return
 			}
 		}()
 
-		// Wallet loaded successfully, show main GUI
-		mainGUI := gui.NewMainGUI(myApp, mainWindow, walletManager)
+		mainGUI := gui.NewMainGUI(myApp, mainWindow, manager, password)
 		mainWindow.SetContent(mainGUI.GetContent())
+		// Re-apply the main window size after SetContent so layout changes made
+		// during setup/unlock do not leave the window at the wrong dimensions.
+		mainWindow.Resize(fyne.NewSize(1000, 750))
 	}
 
-	if walletManager != nil {
-		defer storage.SavePlain(walletManager.DataDir, walletManager)
+	if !walletExists {
+		setupWizard := gui.NewSetupWizard(
+			myApp, mainWindow, resolvedDataDir,
+			func(manager *controller.Manager, password []byte) {
+				startMainGUI(manager, password)
+			},
+		)
+		setupWizard.Show()
+	} else {
+		unlockScreen := gui.NewUnlockScreen(
+			myApp, mainWindow, resolvedDataDir,
+			func(password []byte) {
+				manager, _, err := setup.NewManagerWithDataDir(resolvedDataDir, password)
+				if err != nil {
+					logging.L.Err(err).Msg("failed to load wallet after unlock")
+					dialog.ShowError(fmt.Errorf("failed to load wallet: %v", err), mainWindow)
+					return
+				}
+				startMainGUI(manager, password)
+			},
+		)
+		unlockScreen.Show()
 	}
 
 	// Tray settings
@@ -148,10 +134,9 @@ func main() {
 				mainWindow.Show()
 			}))
 		desk.SetSystemTrayMenu(m)
-		// desk.SetSystemTrayIcon(fyne.CurrentApp().Icon())
 		if myApp.Metadata().Icon != nil {
 			logging.L.Trace().Msg("have metadata icon")
-			desk.SetSystemTrayIcon(myApp.Metadata().Icon) // tray
+			desk.SetSystemTrayIcon(myApp.Metadata().Icon)
 		} else {
 			logging.L.Trace().Msg("failed to find metadata icon")
 		}
@@ -159,6 +144,5 @@ func main() {
 
 	mainWindow.SetCloseIntercept(func() { mainWindow.Hide() })
 
-	// Show and run the application
 	mainWindow.ShowAndRun()
 }
