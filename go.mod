@@ -12,6 +12,7 @@ require (
 	github.com/shopspring/decimal v1.4.0
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/spf13/pflag v1.0.5
+	golang.org/x/crypto v0.41.0
 	golang.org/x/text v0.30.0
 )
 
@@ -53,7 +54,6 @@ require (
 	github.com/stretchr/testify v1.11.1 // indirect
 	github.com/tyler-smith/go-bip39 v1.1.0 // indirect
 	github.com/yuin/goldmark v1.7.8 // indirect
-	golang.org/x/crypto v0.41.0 // indirect
 	golang.org/x/image v0.24.0 // indirect
 	golang.org/x/mobile v0.0.0-20231127183840-76ac6878050a // indirect
 	golang.org/x/net v0.42.0 // indirect

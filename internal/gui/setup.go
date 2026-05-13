@@ -24,7 +24,7 @@ type SetupWizard struct {
 	app                fyne.App
 	window             fyne.Window
 	dataDir            string
-	onFinish           func(*controller.Manager)
+	onFinish           func(*controller.Manager, []byte)
 	currentBlockHeight uint64
 	currentNetwork     types.Network
 }
@@ -33,7 +33,7 @@ func NewSetupWizard(
 	app fyne.App,
 	window fyne.Window,
 	dataDir string,
-	onFinish func(*controller.Manager),
+	onFinish func(*controller.Manager, []byte),
 ) *SetupWizard {
 	return &SetupWizard{
 		app:      app,
@@ -463,11 +463,9 @@ func (s *SetupWizard) showConfigurationDialog(manager *controller.Manager) {
 		// Parse birth height
 		if birthHeightEntry.Text != "" {
 			if height, err := strconv.Atoi(birthHeightEntry.Text); err == nil {
-				// Set the wallet's BirthHeight and LastScanHeight for new wallets
 				manager.SetBirthHeight(uint64(height), true)
 			}
 		} else {
-			// If no birth height specified, set to 0 and let the scanner handle it
 			manager.SetBirthHeight(0, true)
 		}
 
@@ -481,22 +479,13 @@ func (s *SetupWizard) showConfigurationDialog(manager *controller.Manager) {
 			manager.MinChangeAmount = minChange
 		}
 
-		// Set oracle address
+		// Set oracle address and TLS preference
 		manager.OracleAddress = oracleEntry.Text
 		manager.OracleUseTLS = useTLSCheck.Checked
 		manager.FeeEstimationEnabled = feeEstimationCheck.Checked
 
-		// Save the manager
-		if err := storage.SavePlain(s.dataDir, manager); err != nil {
-			logging.L.Err(err).
-				Str("datadir", s.dataDir).
-				Msg("failed to save wallet")
-			dialog.ShowError(fmt.Errorf("failed to save wallet: %v", err), s.window)
-			return
-		}
-
-		// Call the finish callback - the main GUI will replace the window content
-		s.onFinish(manager)
+		// Proceed to password setup before persisting
+		s.showPasswordSetupDialog(manager)
 	})
 
 	backBtn := widget.NewButton("Back", func() {
@@ -523,6 +512,82 @@ func (s *SetupWizard) showConfigurationDialog(manager *controller.Manager) {
 	)
 
 	// Set the window content directly
+	s.window.SetContent(content)
+	s.window.Resize(fyne.NewSize(600, 500))
+}
+
+// showPasswordSetupDialog collects and confirms a new wallet password, then
+// persists the wallet and oracle settings before invoking onFinish.
+// Leaving both fields empty skips encryption and saves a plaintext wallet.
+func (s *SetupWizard) showPasswordSetupDialog(manager *controller.Manager) {
+	titleText := widget.NewRichTextFromMarkdown(`
+# Set Wallet Password
+
+Optionally protect your wallet file with a password. You will need this password every time you open BlindBit Desktop.
+
+**Leave blank to skip encryption (not recommended).** If you set a password, your seed phrase is the only way to recover access if you forget it.
+`)
+	titleText.Wrapping = fyne.TextWrapWord
+
+	passwordEntry := widget.NewPasswordEntry()
+	passwordEntry.SetPlaceHolder("Password (leave blank for no encryption)")
+
+	confirmEntry := widget.NewPasswordEntry()
+	confirmEntry.SetPlaceHolder("Confirm password")
+
+	errorLabel := widget.NewLabel("")
+	errorLabel.Hide()
+
+	saveBtn := widget.NewButton("Finish", func() {
+		pwd := passwordEntry.Text
+		confirm := confirmEntry.Text
+
+		// If a password is supplied both fields must match.
+		if len(pwd) > 0 && pwd != confirm {
+			errorLabel.SetText("Passwords do not match")
+			errorLabel.Show()
+			return
+		}
+
+		password := []byte(pwd)
+
+		// Persist wallet — encrypted when a password is set, plaintext otherwise.
+		if err := storage.SaveWithPassword(s.dataDir, manager, password); err != nil {
+			logging.L.Err(err).Str("datadir", s.dataDir).Msg("failed to save wallet")
+			dialog.ShowError(fmt.Errorf("failed to save wallet: %v", err), s.window)
+			return
+		}
+
+		// Persist oracle settings alongside the wallet.
+		if err := storage.SaveSettings(s.dataDir, &storage.Settings{
+			OracleAddress: manager.OracleAddress,
+			OracleUseTLS:  manager.OracleUseTLS,
+		}); err != nil {
+			logging.L.Err(err).Str("datadir", s.dataDir).Msg("failed to save settings")
+			dialog.ShowError(fmt.Errorf("failed to save settings: %v", err), s.window)
+			return
+		}
+
+		s.onFinish(manager, password)
+	})
+	saveBtn.Importance = widget.HighImportance
+
+	backBtn := widget.NewButton("Back", func() {
+		s.showConfigurationDialog(manager)
+	})
+
+	content := container.NewVBox(
+		titleText,
+		widget.NewSeparator(),
+		widget.NewLabel("Password:"),
+		passwordEntry,
+		widget.NewLabel("Confirm Password:"),
+		confirmEntry,
+		errorLabel,
+		widget.NewSeparator(),
+		container.NewHBox(backBtn, saveBtn),
+	)
+
 	s.window.SetContent(content)
 	s.window.Resize(fyne.NewSize(600, 500))
 }

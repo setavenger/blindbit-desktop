@@ -22,8 +22,8 @@ type Manager struct {
 	DustLimit       int            `json:"dust_limit"`
 	LabelCount      int            `json:"label_count"` // should always be 0
 	MinChangeAmount uint64         `json:"min_change_amount"`
-	OracleAddress   string         `json:"oracle_address"` // for now only gRPC possible will need a flag and options in future
-	OracleUseTLS    bool           `json:"oracle_use_tls"`
+	OracleAddress   string         `json:"-"` // stored in settings.json, not in the encrypted wallet blob
+	OracleUseTLS    bool           `json:"-"` // stored in settings.json, not in the encrypted wallet blob
 
 	// FeeEstimationEnabled toggles fetching fee rate suggestions from
 	// mempool.space. Enabled by default; disable in Settings if you want to

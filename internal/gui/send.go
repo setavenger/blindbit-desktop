@@ -399,10 +399,8 @@ func (g *MainGUI) broadcastTransaction(
 
 	// save wallet in the background
 	go func() {
-		err := storage.SavePlain(g.manager.DataDir, g.manager)
-		if err != nil {
+		if err := storage.SaveWithPassword(g.manager.DataDir, g.manager, g.password); err != nil {
 			logging.L.Err(err).Msg("failed to save wallet")
-			return
 		}
 	}()
 

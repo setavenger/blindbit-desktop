@@ -77,6 +77,20 @@ func (g *MainGUI) createSettingsTab() fyne.CanvasObject {
 		)
 	})
 
+	// Change Password section
+	currentPwdEntry := widget.NewPasswordEntry()
+	currentPwdEntry.SetPlaceHolder("Current password")
+
+	newPwdEntry := widget.NewPasswordEntry()
+	newPwdEntry.SetPlaceHolder("New password (leave blank to remove encryption)")
+
+	confirmPwdEntry := widget.NewPasswordEntry()
+	confirmPwdEntry.SetPlaceHolder("Confirm new password")
+
+	changePwdBtn := widget.NewButton("Change Password", func() {
+		g.changePassword(currentPwdEntry, newPwdEntry, confirmPwdEntry)
+	})
+
 	// Form layout
 	form := container.NewVBox(
 		widget.NewLabel("Wallet Settings"),
@@ -99,6 +113,15 @@ func (g *MainGUI) createSettingsTab() fyne.CanvasObject {
 		feeEstimationHint,
 		widget.NewSeparator(),
 		container.NewHBox(resetBtn, saveBtn),
+		widget.NewSeparator(),
+		widget.NewLabel("Change Password"),
+		widget.NewLabel("Current Password:"),
+		currentPwdEntry,
+		widget.NewLabel("New Password:"),
+		newPwdEntry,
+		widget.NewLabel("Confirm New Password:"),
+		confirmPwdEntry,
+		changePwdBtn,
 	)
 
 	return form
@@ -140,16 +163,70 @@ func (g *MainGUI) saveSettings(
 	g.manager.OracleUseTLS = useTLS
 	g.manager.FeeEstimationEnabled = feeEstimationEnabled
 
-	// Save the manager
-	if err := storage.SavePlain(g.manager.DataDir, g.manager); err != nil {
-		logging.L.Err(err).Msg("failed to save settings")
+	// Persist oracle settings to settings.json.
+	if err := storage.SaveSettings(g.manager.DataDir, &storage.Settings{
+		OracleAddress: oracleAddr,
+		OracleUseTLS:  useTLS,
+	}); err != nil {
+		logging.L.Err(err).Msg("failed to save oracle settings")
 		dialog.ShowError(fmt.Errorf("failed to save settings: %v", err), g.window)
+		return
+	}
+
+	// Persist the wallet blob (encrypted or plaintext depending on session password).
+	if err := storage.SaveWithPassword(g.manager.DataDir, g.manager, g.password); err != nil {
+		logging.L.Err(err).Msg("failed to save wallet")
+		dialog.ShowError(fmt.Errorf("failed to save wallet: %v", err), g.window)
 		return
 	}
 
 	// Show success message
 	dialog.ShowInformation("Success", "Settings saved successfully!", g.window)
 	g.askForShutdown()
+}
+
+func (g *MainGUI) changePassword(
+	currentPwdEntry, newPwdEntry, confirmPwdEntry *widget.Entry,
+) {
+	currentPwd := []byte(currentPwdEntry.Text)
+	newPwd := []byte(newPwdEntry.Text)
+	confirmPwd := []byte(confirmPwdEntry.Text)
+
+	// If a new password is supplied both confirmation fields must match.
+	if len(newPwd) > 0 && string(newPwd) != string(confirmPwd) {
+		dialog.ShowError(fmt.Errorf("new passwords do not match"), g.window)
+		return
+	}
+
+	// Verify the current password only when the wallet is currently encrypted.
+	if len(g.password) > 0 {
+		if _, err := storage.Load(g.manager.DataDir, currentPwd); err != nil {
+			dialog.ShowError(fmt.Errorf("incorrect current password"), g.window)
+			return
+		}
+	}
+
+	// Re-save — encrypted when a new password is provided, plaintext otherwise.
+	if err := storage.SaveWithPassword(g.manager.DataDir, g.manager, newPwd); err != nil {
+		logging.L.Err(err).Msg("failed to re-save wallet with new password")
+		dialog.ShowError(fmt.Errorf("failed to update password: %v", err), g.window)
+		return
+	}
+
+	// Update the in-session password.
+	g.password = newPwd
+
+	currentPwdEntry.SetText("")
+	newPwdEntry.SetText("")
+	confirmPwdEntry.SetText("")
+
+	var msg string
+	if len(newPwd) == 0 {
+		msg = "Password removed. Wallet is now saved without encryption."
+	} else {
+		msg = "Password changed successfully!"
+	}
+	dialog.ShowInformation("Success", msg, g.window)
 }
 
 func (g *MainGUI) resetToDefaults(

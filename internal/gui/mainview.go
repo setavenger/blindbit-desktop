@@ -16,6 +16,7 @@ type MainGUI struct {
 	app             fyne.App
 	window          fyne.Window
 	manager         *controller.Manager
+	password        []byte
 	tabs            *container.AppTabs
 	transactionList *widget.List // Reference to transaction list for refreshing
 }
@@ -24,11 +25,13 @@ func NewMainGUI(
 	app fyne.App,
 	window fyne.Window,
 	manager *controller.Manager,
+	password []byte,
 ) *MainGUI {
 	gui := &MainGUI{
-		app:     app,
-		window:  window,
-		manager: manager,
+		app:      app,
+		window:   window,
+		manager:  manager,
+		password: password,
 	}
 
 	gui.setupTabs()
@@ -51,17 +54,12 @@ func (g *MainGUI) GetContent() fyne.CanvasObject {
 	return g.tabs
 }
 
-// CleanupAndExit exits the program with status 0
-// Before that it:
-// - saves the data to file
+// CleanupAndExit saves the wallet and exits with status 0.
 func (g *MainGUI) CleanupAndExit() {
-	// Simple cleanup - avoid any operations that might cause issues during shutdown
-	// The app will handle most cleanup automatically
-	if err := storage.SavePlain(g.manager.DataDir, g.manager); err != nil {
+	if err := storage.SaveWithPassword(g.manager.DataDir, g.manager, g.password); err != nil {
 		logging.L.Err(err).Msg("error during shutdown")
 		os.Exit(1)
 	}
-
 	os.Exit(0)
 }
 
